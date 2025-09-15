@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -12,112 +12,34 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Search, Filter, Star, Heart, ArrowLeft, Grid, List } from "lucide-react"
 import { CartDrawer } from "@/components/cart-drawer"
+import { useAuth } from "@/components/auth-provider"
 
-// Mock product data
-const mockProducts = [
-  {
-    id: 1,
-    name: "Traditional Kandyan Saree",
-    price: 12500,
-    originalPrice: 15000,
-    category: "Women",
-    subcategory: "Sarees",
-    image: "/traditional-kandyan-saree.png",
-    rating: 4.8,
-    reviews: 24,
-    colors: ["Red", "Blue", "Gold"],
-    sizes: ["S", "M", "L", "XL"],
-    isFeatured: true,
-    isPreOrder: false,
-    stock: 15,
-  },
-  {
-    id: 2,
-    name: "Men's Batik Shirt",
-    price: 3500,
-    originalPrice: null,
-    category: "Men",
-    subcategory: "Shirts",
-    image: "/sri-lankan-batik-shirt.png",
-    rating: 4.6,
-    reviews: 18,
-    colors: ["Blue", "Green", "Brown"],
-    sizes: ["S", "M", "L", "XL", "XXL"],
-    isFeatured: false,
-    isPreOrder: false,
-    stock: 8,
-  },
-  {
-    id: 3,
-    name: "Kids Festival Dress",
-    price: 2800,
-    originalPrice: 3200,
-    category: "Kids",
-    subcategory: "Dresses",
-    image: "/sri-lankan-kids-festival-dress.png",
-    rating: 4.9,
-    reviews: 12,
-    colors: ["Pink", "Yellow", "White"],
-    sizes: ["2T", "3T", "4T", "5T"],
-    isFeatured: true,
-    isPreOrder: false,
-    stock: 22,
-  },
-  {
-    id: 4,
-    name: "Avurudu Special Sarong",
-    price: 4200,
-    originalPrice: null,
-    category: "Men",
-    subcategory: "Traditional",
-    image: "/sri-lankan-sarong-avurudu.png",
-    rating: 4.7,
-    reviews: 31,
-    colors: ["White", "Cream", "Gold"],
-    sizes: ["One Size"],
-    isFeatured: false,
-    isPreOrder: true,
-    stock: 0,
-  },
-  {
-    id: 5,
-    name: "Handloom Cotton Blouse",
-    price: 1800,
-    originalPrice: null,
-    category: "Women",
-    subcategory: "Blouses",
-    image: "/handloom-cotton-blouse.png",
-    rating: 4.5,
-    reviews: 9,
-    colors: ["White", "Cream", "Light Blue"],
-    sizes: ["S", "M", "L"],
-    isFeatured: false,
-    isPreOrder: false,
-    stock: 5,
-  },
-  {
-    id: 6,
-    name: "Wedding Osariya",
-    price: 25000,
-    originalPrice: 28000,
-    category: "Women",
-    subcategory: "Wedding",
-    image: "/sri-lankan-wedding-osariya.png",
-    rating: 5.0,
-    reviews: 7,
-    colors: ["Gold", "Silver", "Red"],
-    sizes: ["S", "M", "L"],
-    isFeatured: true,
-    isPreOrder: false,
-    stock: 3,
-  },
+interface Product {
+  ProductID: number
+  ProductName: string
+  BasePrice: number
+  WholesalePrice: number | null
+  CategoryName: string
+  PrimaryImage: string | null
+  VariantCount: number
+  TotalStock: number
+  IsFeatured: boolean
+  IsActive: boolean
+}
+
+const categories = [
+  { id: 0, name: "All" },
+  { id: 1, name: "Men" },
+  { id: 2, name: "Women" },
+  { id: 3, name: "Kids" },
 ]
-
-const categories = ["All", "Men", "Women", "Kids"]
 const subcategories = ["All", "Sarees", "Shirts", "Dresses", "Traditional", "Blouses", "Wedding"]
 const colors = ["Red", "Blue", "Gold", "Green", "Brown", "Pink", "Yellow", "White", "Cream", "Light Blue", "Silver"]
 
 export default function ProductsPage() {
+  const { user, token } = useAuth()
+  const [products, setProducts] = useState<Product[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [selectedSubcategory, setSelectedSubcategory] = useState("All")
@@ -126,37 +48,122 @@ export default function ProductsPage() {
   const [sortBy, setSortBy] = useState("featured")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [showFilters, setShowFilters] = useState(false)
+  const [cartRefreshTrigger, setCartRefreshTrigger] = useState(0)
 
-  const filteredProducts = mockProducts.filter((product) => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === "All" || product.category === selectedCategory
-    const matchesSubcategory = selectedSubcategory === "All" || product.subcategory === selectedSubcategory
-    const matchesColor = selectedColors.length === 0 || selectedColors.some((color) => product.colors.includes(color))
-    const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1]
+  const fetchProducts = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (searchTerm) params.append('search', searchTerm)
+      if (selectedCategory !== "All") {
+        const categoryObj = categories.find(c => c.name === selectedCategory)
+        if (categoryObj) {
+          params.append('category', categoryObj.id.toString())
+        }
+      }
+      if (priceRange[0] > 0) params.append('minPrice', priceRange[0].toString())
+      if (priceRange[1] < 30000) params.append('maxPrice', priceRange[1].toString())
+      params.append('sortBy', sortBy === "featured" ? "featured" : sortBy === "price-low" ? "price" : sortBy === "price-high" ? "price" : "created")
+      params.append('sortOrder', sortBy === "price-high" ? "desc" : "asc")
 
-    return matchesSearch && matchesCategory && matchesSubcategory && matchesColor && matchesPrice
-  })
+      const response = await fetch(`/api/products?${params}`)
+      const data = await response.json()
 
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    switch (sortBy) {
-      case "price-low":
-        return a.price - b.price
-      case "price-high":
-        return b.price - a.price
-      case "rating":
-        return b.rating - a.rating
-      case "newest":
-        return b.id - a.id
-      default:
-        return b.isFeatured ? 1 : -1
+      if (data.success) {
+        setProducts(data.data.products)
+      }
+    } catch (error) {
+      console.error('Failed to fetch products:', error)
+    } finally {
+      setIsLoading(false)
     }
+  }
+
+  useEffect(() => {
+    fetchProducts()
+  }, [searchTerm, selectedCategory, priceRange, sortBy])
+
+  const filteredProducts = products.filter((product) => {
+    const matchesSubcategory = selectedSubcategory === "All" || product.CategoryName === selectedSubcategory
+    const matchesColor = selectedColors.length === 0 // For now, we'll skip color filtering since it's not in the API response
+
+    return matchesSubcategory && matchesColor
   })
+
+  const sortedProducts = [...filteredProducts]
 
   const handleColorChange = (color: string, checked: boolean) => {
     if (checked) {
       setSelectedColors([...selectedColors, color])
     } else {
       setSelectedColors(selectedColors.filter((c) => c !== color))
+    }
+  }
+
+  const addToCart = async (productId: number) => {
+    if (user && token) {
+      // Add to API for logged-in users
+      try {
+        const response = await fetch('/api/cart', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            productId: productId,
+            quantity: 1,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          alert("Item added to cart successfully!")
+          setCartRefreshTrigger(prev => prev + 1) // Trigger cart refresh
+        } else {
+          alert(data.message || 'Failed to add item to cart')
+        }
+      } catch (error) {
+        console.error('Failed to add to cart:', error)
+        alert('Failed to add item to cart')
+      }
+    } else {
+      // Add to localStorage for guests
+      const guestCart = localStorage.getItem('guestCart')
+      let cartItems: any[] = []
+      if (guestCart) {
+        try {
+          cartItems = JSON.parse(guestCart)
+        } catch (error) {
+          console.error('Failed to parse guest cart:', error)
+        }
+      }
+
+      // Check if item already exists
+      const existingItem = cartItems.find(item => item.ProductID === productId)
+      if (existingItem) {
+        existingItem.Quantity += 1
+      } else {
+        // Find product details from products state
+        const product = products.find(p => p.ProductID === productId)
+        cartItems.push({
+          CartID: Date.now(), // Temporary ID
+          ProductID: productId,
+          VariantID: null,
+          Quantity: 1,
+          ProductName: product?.ProductName || 'Product',
+          BasePrice: product?.BasePrice || 0,
+          WholesalePrice: product?.WholesalePrice || null,
+          Size: null,
+          Color: null,
+          Stock: product?.TotalStock || 0,
+          ImageURL: product?.PrimaryImage || null,
+        })
+      }
+
+      localStorage.setItem('guestCart', JSON.stringify(cartItems))
+      alert("Item added to cart successfully!")
+      setCartRefreshTrigger(prev => prev + 1) // Trigger cart refresh
     }
   }
 
@@ -181,7 +188,7 @@ export default function ProductsPage() {
                   Login
                 </Button>
               </Link>
-              <CartDrawer />
+              <CartDrawer refreshTrigger={cartRefreshTrigger} />
             </div>
           </div>
         </div>
@@ -213,8 +220,8 @@ export default function ProductsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
+                      <SelectItem key={category.id} value={category.name}>
+                        {category.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -284,9 +291,9 @@ export default function ProductsPage() {
                   <Filter className="h-4 w-4 mr-2" />
                   Filters
                 </Button>
-                <p className="text-sm text-muted-foreground">
-                  Showing {sortedProducts.length} of {mockProducts.length} products
-                </p>
+              <p className="text-sm text-muted-foreground">
+                Showing {sortedProducts.length} of {products.length} products
+              </p>
               </div>
 
               <div className="flex items-center gap-4">
@@ -332,27 +339,19 @@ export default function ProductsPage() {
             >
               {sortedProducts.map((product) => (
                 <Card
-                  key={product.id}
+                  key={product.ProductID}
                   className={`group cursor-pointer hover:shadow-lg transition-shadow ${
                     viewMode === "list" ? "flex flex-row" : ""
                   }`}
                 >
                   <div className={`relative ${viewMode === "list" ? "w-48 flex-shrink-0" : "aspect-square"}`}>
                     <img
-                      src={product.image || "/placeholder.svg"}
-                      alt={product.name}
+                      src={product.PrimaryImage || "/placeholder.svg"}
+                      alt={product.ProductName}
                       className="w-full h-full object-cover rounded-t-lg group-hover:scale-105 transition-transform"
                     />
-                    {product.isFeatured && (
+                    {product.IsFeatured && (
                       <Badge className="absolute top-2 left-2 bg-orange-600 hover:bg-orange-700">Featured</Badge>
-                    )}
-                    {product.isPreOrder && (
-                      <Badge className="absolute top-2 left-2 bg-blue-600 hover:bg-blue-700">Pre-Order</Badge>
-                    )}
-                    {product.originalPrice && (
-                      <Badge variant="destructive" className="absolute top-2 right-2 bg-red-600 hover:bg-red-700">
-                        Sale
-                      </Badge>
                     )}
                     <Button
                       variant="outline"
@@ -365,46 +364,39 @@ export default function ProductsPage() {
 
                   <CardContent className={`p-4 ${viewMode === "list" ? "flex-1" : ""}`}>
                     <div className="space-y-2">
-                      <h3 className="font-semibold text-sm line-clamp-2">{product.name}</h3>
+                      <h3 className="font-semibold text-sm line-clamp-2">{product.ProductName}</h3>
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center">
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          <span className="text-sm text-muted-foreground ml-1">
-                            {product.rating} ({product.reviews})
-                          </span>
-                        </div>
+                        <span className="text-sm text-muted-foreground">{product.CategoryName}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-lg font-bold">LKR {product.price.toLocaleString()}</span>
-                        {product.originalPrice && (
+                        <span className="text-lg font-bold">LKR {product.BasePrice.toLocaleString()}</span>
+                        {product.WholesalePrice && product.WholesalePrice < product.BasePrice && (
                           <span className="text-sm text-muted-foreground line-through">
-                            LKR {product.originalPrice.toLocaleString()}
+                            LKR {product.WholesalePrice.toLocaleString()}
                           </span>
                         )}
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        {product.colors.slice(0, 3).map((color) => (
-                          <Badge key={color} variant="outline" className="text-xs">
-                            {color}
-                          </Badge>
-                        ))}
-                        {product.colors.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{product.colors.length - 3}
-                          </Badge>
-                        )}
+                        <Badge variant="outline" className="text-xs">
+                          {product.VariantCount} variants
+                        </Badge>
                       </div>
-                      {product.stock <= 5 && product.stock > 0 && (
-                        <p className="text-xs text-orange-600">Only {product.stock} left in stock</p>
+                      {product.TotalStock <= 5 && product.TotalStock > 0 && (
+                        <p className="text-xs text-orange-600">Only {product.TotalStock} left in stock</p>
                       )}
-                      {product.stock === 0 && !product.isPreOrder && (
+                      {product.TotalStock === 0 && (
                         <p className="text-xs text-red-600">Out of stock</p>
                       )}
                       <div className="flex gap-2 pt-2">
-                        <Button size="sm" className="flex-1" disabled={product.stock === 0 && !product.isPreOrder}>
-                          {product.isPreOrder ? "Pre-Order" : "Add to Cart"}
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          disabled={product.TotalStock === 0}
+                          onClick={() => addToCart(product.ProductID)}
+                        >
+                          Add to Cart
                         </Button>
-                        {product.stock === 0 && !product.isPreOrder && (
+                        {product.TotalStock === 0 && (
                           <Button variant="outline" size="sm">
                             Notify Me
                           </Button>

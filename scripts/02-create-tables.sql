@@ -170,4 +170,16 @@ CREATE TABLE RestockNotifications (
     CreatedAt DATETIME DEFAULT GETDATE()
 );
 
+-- Product Ratings Table
+CREATE TABLE ProductRatings (
+    RatingID INT IDENTITY(1,1) PRIMARY KEY,
+    UserID INT FOREIGN KEY REFERENCES Users(UserID),
+    ProductID INT FOREIGN KEY REFERENCES Products(ProductID),
+    Rating INT NOT NULL CHECK (Rating >= 1 AND Rating <= 5),
+    Review NTEXT,
+    CreatedAt DATETIME DEFAULT GETDATE(),
+    UpdatedAt DATETIME DEFAULT GETDATE(),
+    UNIQUE(UserID, ProductID) -- One rating per user per product
+);
+
 PRINT 'All tables created successfully!';

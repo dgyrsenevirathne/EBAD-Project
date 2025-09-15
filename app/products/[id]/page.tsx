@@ -2,8 +2,10 @@
 
 import { Label } from "@/components/ui/label"
 import { CartDrawer } from "@/components/cart-drawer"
+import { useAuth } from "@/components/auth-provider"
+import { Textarea } from "@/components/ui/textarea"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -11,83 +13,208 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, Star, Heart, Truck, Shield, RotateCcw, Share2, Minus, Plus } from "lucide-react"
+import { ArrowLeft, Star, Heart, Truck, Shield, RotateCcw, Share2, Minus, Plus, Send } from "lucide-react"
 
-// Mock product data - in real app this would come from API
-const mockProduct = {
-  id: 1,
-  name: "Traditional Kandyan Saree",
-  price: 12500,
-  originalPrice: 15000,
-  category: "Women",
-  subcategory: "Sarees",
-  images: [
-    "/traditional-kandyan-saree-front.png",
-    "/traditional-kandyan-saree-back.png",
-    "/traditional-kandyan-saree-detail.png",
-    "/traditional-kandyan-saree-model.png",
-  ],
-  rating: 4.8,
-  reviews: 24,
-  colors: ["Red", "Blue", "Gold"],
-  sizes: ["S", "M", "L", "XL"],
-  isFeatured: true,
-  isPreOrder: false,
-  stock: 15,
-  description:
-    "Exquisite traditional Kandyan saree crafted with authentic Sri Lankan techniques. Perfect for weddings, cultural events, and special occasions. Made from premium silk with intricate embroidery work.",
-  features: [
-    "100% Pure Silk Material",
-    "Hand-embroidered Details",
-    "Traditional Kandyan Design",
-    "Includes Matching Blouse Piece",
-    "Dry Clean Only",
-  ],
-  specifications: {
-    Material: "Pure Silk",
-    Origin: "Kandy, Sri Lanka",
-    Care: "Dry Clean Only",
-    Weight: "800g",
-    Length: "5.5 meters",
-  },
+interface Product {
+  ProductID: number
+  ProductName: string
+  BasePrice: number
+  CategoryName: string
+  Description: string
+  IsFeatured: boolean
+  variants: any[]
+  images: any[]
+  averageRating: number
+  ratingCount: number
 }
 
-const reviews = [
-  {
-    id: 1,
-    name: "Priya Fernando",
-    rating: 5,
-    date: "2024-01-15",
-    comment:
-      "Absolutely beautiful saree! The quality is exceptional and the embroidery work is stunning. Perfect for my daughter's wedding.",
-  },
-  {
-    id: 2,
-    name: "Malini Silva",
-    rating: 4,
-    date: "2024-01-10",
-    comment: "Great quality and fast delivery. The color is exactly as shown in the pictures. Highly recommended!",
-  },
-  {
-    id: 3,
-    name: "Chamari Perera",
-    rating: 5,
-    date: "2024-01-05",
-    comment: "This is my third purchase from Ceylon Threads. Always excellent quality and authentic designs.",
-  },
-]
+interface Rating {
+  id: number
+  rating: number
+  review: string
+  date: string
+  name: string
+}
 
-export default function ProductDetailPage() {
+export default function ProductDetailPage({ params }: { params: { id: string } }) {
+  const { user, token } = useAuth()
   const [selectedImage, setSelectedImage] = useState(0)
-  const [selectedColor, setSelectedColor] = useState(mockProduct.colors[0])
-  const [selectedSize, setSelectedSize] = useState(mockProduct.sizes[1])
+  const [product, setProduct] = useState<Product | null>(null)
+  const [ratings, setRatings] = useState<Rating[]>([])
+  const [loading, setLoading] = useState(true)
+  const [ratingLoading, setRatingLoading] = useState(false)
+  const [newRating, setNewRating] = useState(5)
+  const [newReview, setNewReview] = useState('')
   const [quantity, setQuantity] = useState(1)
+
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        const response = await fetch(`/api/products/${params.id}`)
+        const data = await response.json()
+        if (data.success) {
+          setProduct(data.data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch product:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    const fetchRatings = async () => {
+      try {
+        const response = await fetch(`/api/products/ratings?productId=${params.id}`)
+        const data = await response.json()
+        if (data.success) {
+          setRatings(data.data.ratings)
+        }
+      } catch (error) {
+        console.error('Failed to fetch ratings:', error)
+      }
+    }
+
+    fetchProduct()
+    fetchRatings()
+  }, [params.id])
 
   const handleQuantityChange = (change: number) => {
     const newQuantity = quantity + change
-    if (newQuantity >= 1 && newQuantity <= mockProduct.stock) {
+    if (newQuantity >= 1 && newQuantity <= (product?.variants?.[0]?.Stock || 1)) {
       setQuantity(newQuantity)
     }
+  }
+
+  const addToCart = async () => {
+    if (user && token) {
+      // Add to API for logged-in users
+      try {
+        const response = await fetch('/api/cart', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            productId: product?.ProductID,
+            quantity: quantity,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          alert("Item added to cart successfully!")
+        } else {
+          alert(data.message || 'Failed to add item to cart')
+        }
+      } catch (error) {
+        console.error('Failed to add to cart:', error)
+        alert('Failed to add item to cart')
+      }
+    } else {
+      // Add to localStorage for guests
+      const guestCart = localStorage.getItem('guestCart')
+      let cartItems: any[] = []
+      if (guestCart) {
+        try {
+          cartItems = JSON.parse(guestCart)
+        } catch (error) {
+          console.error('Failed to parse guest cart:', error)
+        }
+      }
+
+      // Check if item already exists
+      const existingItem = cartItems.find(item => item.ProductID === product?.ProductID)
+      if (existingItem) {
+        existingItem.Quantity += quantity
+      } else {
+        // Add item with actual product details
+        cartItems.push({
+          CartID: Date.now(), // Temporary ID
+          ProductID: product?.ProductID,
+          VariantID: null,
+          Quantity: quantity,
+          ProductName: product?.ProductName || 'Product',
+          BasePrice: product?.BasePrice || 0,
+          WholesalePrice: null,
+          Size: null,
+          Color: null,
+          Stock: product?.variants?.[0]?.Stock || 0,
+          ImageURL: product?.images?.[0]?.ImageURL || null,
+        })
+      }
+
+      localStorage.setItem('guestCart', JSON.stringify(cartItems))
+      alert("Item added to cart successfully!")
+    }
+  }
+
+  const submitRating = async () => {
+    if (!user || !token) {
+      alert("Please login to rate products")
+      return
+    }
+
+    setRatingLoading(true)
+    try {
+      const response = await fetch('/api/products/ratings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id.toString(), // Assuming user.id exists
+        },
+        body: JSON.stringify({
+          productId: product?.ProductID,
+          rating: newRating,
+          review: newReview,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert("Rating submitted successfully!")
+        setNewReview('')
+        // Refresh ratings
+        const ratingsResponse = await fetch(`/api/products/ratings?productId=${params.id}`)
+        const ratingsData = await ratingsResponse.json()
+        if (ratingsData.success) {
+          setRatings(ratingsData.data.ratings)
+        }
+      } else {
+        alert(data.message || 'Failed to submit rating')
+      }
+    } catch (error) {
+      console.error('Failed to submit rating:', error)
+      alert('Failed to submit rating')
+    } finally {
+      setRatingLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p>Loading product...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!product) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Product not found</h1>
+          <Link href="/products">
+            <Button>Back to Products</Button>
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -109,7 +236,7 @@ export default function ProductDetailPage() {
               <Button variant="outline" size="sm">
                 <Share2 className="h-4 w-4" />
               </Button>
-              <CartDrawer />
+              <CartDrawer refreshTrigger={0} />
             </div>
           </div>
         </div>
@@ -121,21 +248,16 @@ export default function ProductDetailPage() {
           <div className="space-y-4">
             <div className="aspect-square relative overflow-hidden rounded-lg bg-gray-100">
               <img
-                src={mockProduct.images[selectedImage] || "/placeholder.svg"}
-                alt={mockProduct.name}
+                src={product.images[selectedImage]?.ImageURL || "/placeholder.svg"}
+                alt={product.ProductName}
                 className="w-full h-full object-cover"
               />
-              {mockProduct.isFeatured && (
+              {product.IsFeatured && (
                 <Badge className="absolute top-4 left-4 bg-orange-600 hover:bg-orange-700">Featured</Badge>
-              )}
-              {mockProduct.originalPrice && (
-                <Badge variant="destructive" className="absolute top-4 right-4 bg-red-600 hover:bg-red-700">
-                  {Math.round(((mockProduct.originalPrice - mockProduct.price) / mockProduct.originalPrice) * 100)}% OFF
-                </Badge>
               )}
             </div>
             <div className="grid grid-cols-4 gap-2">
-              {mockProduct.images.map((image, index) => (
+              {product.images.map((image, index) => (
                 <button
                   key={index}
                   onClick={() => setSelectedImage(index)}
@@ -144,8 +266,8 @@ export default function ProductDetailPage() {
                   }`}
                 >
                   <img
-                    src={image || "/placeholder.svg"}
-                    alt={`${mockProduct.name} ${index + 1}`}
+                    src={image.ImageURL || "/placeholder.svg"}
+                    alt={`${product.ProductName} ${index + 1}`}
                     className="w-full h-full object-cover"
                   />
                 </button>
@@ -157,71 +279,30 @@ export default function ProductDetailPage() {
           <div className="space-y-6">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Badge variant="outline">{mockProduct.category}</Badge>
-                <Badge variant="outline">{mockProduct.subcategory}</Badge>
+                <Badge variant="outline">{product.CategoryName}</Badge>
               </div>
-              <h1 className="text-3xl font-bold mb-4">{mockProduct.name}</h1>
+              <h1 className="text-3xl font-bold mb-4">{product.ProductName}</h1>
               <div className="flex items-center gap-4 mb-4">
                 <div className="flex items-center">
                   {[...Array(5)].map((_, i) => (
                     <Star
                       key={i}
                       className={`h-5 w-5 ${
-                        i < Math.floor(mockProduct.rating) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+                        i < Math.floor(product.averageRating) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
                       }`}
                     />
                   ))}
                   <span className="ml-2 text-sm text-muted-foreground">
-                    {mockProduct.rating} ({mockProduct.reviews} reviews)
+                    {product.averageRating} ({product.ratingCount} reviews)
                   </span>
                 </div>
               </div>
               <div className="flex items-center gap-4 mb-6">
-                <span className="text-3xl font-bold">LKR {mockProduct.price.toLocaleString()}</span>
-                {mockProduct.originalPrice && (
-                  <span className="text-xl text-muted-foreground line-through">
-                    LKR {mockProduct.originalPrice.toLocaleString()}
-                  </span>
-                )}
+                <span className="text-3xl font-bold">LKR {product.BasePrice.toLocaleString()}</span>
               </div>
             </div>
 
             <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Color</Label>
-                <div className="flex gap-2">
-                  {mockProduct.colors.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setSelectedColor(color)}
-                      className={`px-4 py-2 rounded-md border text-sm font-medium transition-colors ${
-                        selectedColor === color
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-input bg-background hover:bg-accent"
-                      }`}
-                    >
-                      {color}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Size</Label>
-                <Select value={selectedSize} onValueChange={setSelectedSize}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mockProduct.sizes.map((size) => (
-                      <SelectItem key={size} value={size}>
-                        {size}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div>
                 <Label className="text-sm font-medium mb-2 block">Quantity</Label>
                 <div className="flex items-center gap-2">
@@ -233,17 +314,17 @@ export default function ProductDetailPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleQuantityChange(1)}
-                    disabled={quantity >= mockProduct.stock}
+                    disabled={quantity >= (product?.variants?.[0]?.Stock || 1)}
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">{mockProduct.stock} items available</p>
+                <p className="text-sm text-muted-foreground mt-1">{product?.variants?.[0]?.Stock || 0} items available</p>
               </div>
             </div>
 
             <div className="flex gap-4">
-              <Button size="lg" className="flex-1">
+              <Button size="lg" className="flex-1" onClick={addToCart}>
                 Add to Cart
               </Button>
               <Button variant="outline" size="lg">
@@ -285,65 +366,107 @@ export default function ProductDetailPage() {
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="description">Description</TabsTrigger>
               <TabsTrigger value="specifications">Specifications</TabsTrigger>
-              <TabsTrigger value="reviews">Reviews ({mockProduct.reviews})</TabsTrigger>
+              <TabsTrigger value="reviews">Reviews ({product?.ratingCount || 0})</TabsTrigger>
             </TabsList>
             <TabsContent value="description" className="mt-6">
               <Card>
                 <CardContent className="p-6">
-                  <p className="text-muted-foreground mb-4">{mockProduct.description}</p>
-                  <h4 className="font-semibold mb-3">Features:</h4>
-                  <ul className="space-y-2">
-                    {mockProduct.features.map((feature, index) => (
-                      <li key={index} className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-primary rounded-full" />
-                        <span className="text-sm">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="text-muted-foreground">{product?.Description}</p>
                 </CardContent>
               </Card>
             </TabsContent>
             <TabsContent value="specifications" className="mt-6">
               <Card>
                 <CardContent className="p-6">
-                  <div className="space-y-4">
-                    {Object.entries(mockProduct.specifications).map(([key, value]) => (
-                      <div key={key} className="flex justify-between py-2 border-b border-border last:border-0">
-                        <span className="font-medium">{key}:</span>
-                        <span className="text-muted-foreground">{value}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-muted-foreground">Specifications coming soon...</p>
                 </CardContent>
               </Card>
             </TabsContent>
             <TabsContent value="reviews" className="mt-6">
               <div className="space-y-6">
-                {reviews.map((review) => (
-                  <Card key={review.id}>
+                {user && (
+                  <Card>
                     <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-3">
+                      <h3 className="font-semibold mb-4">Write a Review</h3>
+                      <div className="space-y-4">
                         <div>
-                          <h4 className="font-semibold">{review.name}</h4>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="flex">
-                              {[...Array(5)].map((_, i) => (
+                          <Label className="text-sm font-medium mb-2 block">Rating</Label>
+                          <div className="flex gap-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button
+                                key={star}
+                                onClick={() => setNewRating(star)}
+                                className="focus:outline-none"
+                              >
                                 <Star
-                                  key={i}
-                                  className={`h-4 w-4 ${
-                                    i < review.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+                                  className={`h-6 w-6 ${
+                                    star <= newRating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
                                   }`}
                                 />
-                              ))}
-                            </div>
-                            <span className="text-sm text-muted-foreground">{review.date}</span>
+                              </button>
+                            ))}
                           </div>
                         </div>
+                        <div>
+                          <Label className="text-sm font-medium mb-2 block">Review (Optional)</Label>
+                          <Textarea
+                            value={newReview}
+                            onChange={(e) => setNewReview(e.target.value)}
+                            placeholder="Share your thoughts about this product..."
+                            rows={3}
+                          />
+                        </div>
+                        <Button onClick={submitRating} disabled={ratingLoading}>
+                          {ratingLoading ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Submitting...
+                            </>
+                          ) : (
+                            <>
+                              <Send className="h-4 w-4 mr-2" />
+                              Submit Review
+                            </>
+                          )}
+                        </Button>
                       </div>
-                      <p className="text-muted-foreground">{review.comment}</p>
                     </CardContent>
                   </Card>
-                ))}
+                )}
+
+                {ratings.length > 0 ? (
+                  ratings.map((review) => (
+                    <Card key={review.id}>
+                      <CardContent className="p-6">
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <h4 className="font-semibold">{review.name}</h4>
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star
+                                    key={i}
+                                    className={`h-4 w-4 ${
+                                      i < review.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                              <span className="text-sm text-muted-foreground">{review.date}</span>
+                            </div>
+                          </div>
+                        </div>
+                        {review.review && <p className="text-muted-foreground">{review.review}</p>}
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  <Card>
+                    <CardContent className="p-6 text-center">
+                      <p className="text-muted-foreground">No reviews yet. Be the first to review this product!</p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </TabsContent>
           </Tabs>

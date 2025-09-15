@@ -204,7 +204,7 @@ export default function WholesalePage() {
                   Login
                 </Button>
               </Link>
-              <CartDrawer />
+              <CartDrawer refreshTrigger={0} />
             </div>
           </div>
         </div>

@@ -1,11 +1,44 @@
+"use client"
+
 import Link from "next/link"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Star, Gift, Users, Phone, MapPin } from "lucide-react"
 import { CartDrawer } from "@/components/cart-drawer"
+import { useAuth } from "@/components/auth-provider"
+
+interface FeaturedProduct {
+  ProductID: number
+  ProductName: string
+  BasePrice: number
+  PrimaryImage: string | null
+}
 
 export default function HomePage() {
+  const { user } = useAuth()
+  const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchFeaturedProducts = async () => {
+      try {
+        const response = await fetch('/api/products/featured')
+        const data = await response.json()
+        if (data.success) {
+          setFeaturedProducts(data.data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch featured products:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchFeaturedProducts()
+  }, [])
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -33,15 +66,25 @@ export default function HomePage() {
               </Link>
             </nav>
             <div className="flex items-center space-x-2">
-              <Link href="/login">
-                <Button variant="ghost" size="sm">
-                  Login
-                </Button>
-              </Link>
-              <Link href="/register">
-                <Button size="sm">Sign Up</Button>
-              </Link>
-              <CartDrawer />
+              {user ? (
+                <Link href="/profile">
+                  <Button variant="ghost" size="sm">
+                    Profile
+                  </Button>
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login">
+                    <Button variant="ghost" size="sm">
+                      Login
+                    </Button>
+                  </Link>
+                  <Link href="/register">
+                    <Button size="sm">Sign Up</Button>
+                  </Link>
+                </>
+              )}
+              <CartDrawer refreshTrigger={0} />
             </div>
           </div>
         </div>
@@ -51,7 +94,6 @@ export default function HomePage() {
       <section className="relative bg-gradient-to-br from-orange-50 to-red-50 py-20">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center">
-            <Badge className="mb-4 bg-orange-100 text-orange-800 hover:bg-orange-200">Avurudu Collection 2024</Badge>
             <h2 className="text-4xl md:text-6xl font-bold text-balance mb-6">Authentic Sri Lankan Fashion</h2>
             <p className="text-xl text-muted-foreground text-pretty mb-8">
               Discover traditional and modern clothing crafted with love in Sri Lanka. From festive wear to everyday
@@ -111,21 +153,59 @@ export default function HomePage() {
             <p className="text-muted-foreground">Trending items from our latest collection</p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((item) => (
-              <Card key={item} className="group cursor-pointer hover:shadow-lg transition-shadow">
-                <div className="aspect-square bg-gradient-to-br from-orange-100 to-red-100 rounded-t-lg"></div>
-                <CardContent className="p-4">
-                  <h4 className="font-semibold mb-2">Traditional Saree</h4>
-                  <div className="flex items-center justify-between">
-                    <span className="text-lg font-bold">LKR 8,500</span>
-                    <div className="flex items-center">
-                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm text-muted-foreground ml-1">4.8</span>
+            {loading ? (
+              // Loading placeholders
+              Array.from({ length: 4 }).map((_, index) => (
+                <Card key={index} className="group cursor-pointer hover:shadow-lg transition-shadow">
+                  <div className="aspect-square bg-gradient-to-br from-orange-100 to-red-100 rounded-t-lg animate-pulse"></div>
+                  <CardContent className="p-4">
+                    <div className="h-4 bg-gray-200 rounded mb-2 animate-pulse"></div>
+                    <div className="flex items-center justify-between">
+                      <div className="h-5 bg-gray-200 rounded animate-pulse w-20"></div>
+                      <div className="flex items-center">
+                        <Star className="h-4 w-4 text-gray-200" />
+                        <div className="h-4 bg-gray-200 rounded ml-1 w-8 animate-pulse"></div>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              ))
+            ) : featuredProducts.length > 0 ? (
+              featuredProducts.slice(0, 4).map((product) => (
+                <Link key={product.ProductID} href={`/products/${product.ProductID}`}>
+                  <Card className="group cursor-pointer hover:shadow-lg transition-shadow">
+                    <div className="aspect-square bg-gradient-to-br from-orange-100 to-red-100 rounded-t-lg overflow-hidden">
+                      {product.PrimaryImage ? (
+                        <img
+                          src={product.PrimaryImage}
+                          alt={product.ProductName}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-orange-600">
+                          <span className="text-sm">No Image</span>
+                        </div>
+                      )}
+                    </div>
+                    <CardContent className="p-4">
+                      <h4 className="font-semibold mb-2 line-clamp-2">{product.ProductName}</h4>
+                      <div className="flex items-center justify-between">
+                        <span className="text-lg font-bold">LKR {product.BasePrice.toLocaleString()}</span>
+                        <div className="flex items-center">
+                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          <span className="text-sm text-muted-foreground ml-1">4.8</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))
+            ) : (
+              // No products available
+              <div className="col-span-full text-center py-8">
+                <p className="text-muted-foreground">No featured products available at the moment.</p>
+              </div>
+            )}
           </div>
         </div>
       </section>

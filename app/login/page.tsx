@@ -10,9 +10,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Eye, EyeOff, Phone, Mail } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
 
 export default function LoginPage() {
   const router = useRouter()
+  const { login } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email")
   const [formData, setFormData] = useState({
@@ -27,28 +29,12 @@ export default function LoginPage() {
     e.preventDefault()
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-        }),
-      })
+      const success = await login(formData.email, formData.password)
 
-      const data = await response.json()
-
-      if (data.success) {
-        // Store the token
-        localStorage.setItem("token", data.data.token)
-        localStorage.setItem("user", JSON.stringify(data.data.user))
-
-        // Redirect to profile page
+      if (success) {
         router.push("/profile")
       } else {
-        alert(data.message || "Login failed")
+        alert("Login failed")
       }
     } catch (error) {
       console.error("Login error:", error)

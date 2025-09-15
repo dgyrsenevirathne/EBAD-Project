@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,18 +25,35 @@ import {
   Zap,
 } from "lucide-react"
 import { CartDrawer } from "@/components/cart-drawer"
+import { useAuth } from "@/components/auth-provider"
 
-// Mock user loyalty data
-const mockUserData = {
-  points: 1250,
-  totalEarned: 3450,
-  totalSpent: 2200,
-  referralCode: "PRIYA2024",
-  tier: "Gold",
-  nextTier: "Platinum",
-  pointsToNextTier: 750,
-  referralsCount: 3,
-  reviewsCount: 8,
+interface UserLoyaltyData {
+  points: number
+  totalEarned: number
+  totalSpent: number
+  referralCode: string
+  tier: string
+  nextTier: string
+  pointsToNextTier: number
+  referralsCount: number
+  reviewsCount: number
+}
+
+interface PointsTransaction {
+  id: number
+  type: string
+  points: number
+  description: string
+  date: string
+  reference: string
+}
+
+interface RewardOption {
+  id: number
+  name: string
+  points: number
+  description: string
+  type: string
 }
 
 const loyaltyTiers = [
@@ -61,101 +78,129 @@ const loyaltyTiers = [
   },
 ]
 
-const pointsHistory = [
-  {
-    id: 1,
-    type: "purchase",
-    points: 125,
-    description: "Purchase - Order #ORD001",
-    date: "2024-01-15",
-    reference: "ORD001",
-  },
-  {
-    id: 2,
-    type: "referral",
-    points: 50,
-    description: "Friend referral - Malini Silva",
-    date: "2024-01-12",
-    reference: "REF001",
-  },
-  {
-    id: 3,
-    type: "review",
-    points: 10,
-    description: "Product review - Traditional Saree",
-    date: "2024-01-10",
-    reference: "REV001",
-  },
-  {
-    id: 4,
-    type: "redemption",
-    points: -100,
-    description: "Redeemed for LKR 500 discount",
-    date: "2024-01-08",
-    reference: "RED001",
-  },
-  {
-    id: 5,
-    type: "purchase",
-    points: 85,
-    description: "Purchase - Order #ORD002",
-    date: "2024-01-05",
-    reference: "ORD002",
-  },
-  { id: 6, type: "bonus", points: 25, description: "Welcome bonus", date: "2024-01-01", reference: "BON001" },
-]
-
-const rewardOptions = [
-  { id: 1, name: "LKR 500 Discount", points: 100, description: "Use on any order", type: "discount" },
-  { id: 2, name: "LKR 1,000 Discount", points: 200, description: "Use on any order", type: "discount" },
-  { id: 3, name: "Free Shipping", points: 50, description: "Free delivery on next order", type: "shipping" },
-  { id: 4, name: "LKR 2,500 Discount", points: 500, description: "Use on orders over LKR 10,000", type: "discount" },
-  {
-    id: 5,
-    name: "Exclusive Design Access",
-    points: 300,
-    description: "Early access to new collections",
-    type: "access",
-  },
-  {
-    id: 6,
-    name: "Personal Styling Session",
-    points: 800,
-    description: "1-hour virtual styling consultation",
-    type: "service",
-  },
-]
-
 export default function RewardsPage() {
+  const { user, token } = useAuth()
   const [referralEmail, setReferralEmail] = useState("")
   const [copiedReferral, setCopiedReferral] = useState(false)
+  const [userData, setUserData] = useState<UserLoyaltyData | null>(null)
+  const [pointsHistory, setPointsHistory] = useState<PointsTransaction[]>([])
+  const [rewardOptions, setRewardOptions] = useState<RewardOption[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const currentTier = loyaltyTiers.find((tier) => tier.name === mockUserData.tier)
-  const nextTier = loyaltyTiers.find((tier) => tier.name === mockUserData.nextTier)
-  const tierProgress = nextTier
-    ? ((mockUserData.points - (currentTier?.minPoints || 0)) / (nextTier.minPoints - (currentTier?.minPoints || 0))) *
-      100
-    : 100
+  const fetchRewardsData = async () => {
+    if (!user || !token) return
 
-  const copyReferralCode = () => {
-    navigator.clipboard.writeText(`Use my referral code: ${mockUserData.referralCode} and get 50 bonus points!`)
-    setCopiedReferral(true)
-    setTimeout(() => setCopiedReferral(false), 2000)
-  }
+    try {
+      const [loyaltyResponse, historyResponse, rewardsResponse] = await Promise.all([
+        fetch('/api/rewards/loyalty', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }),
+        fetch('/api/rewards/history', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }),
+        fetch('/api/rewards/options', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }),
+      ])
 
-  const sendReferral = () => {
-    if (referralEmail) {
-      // Mock referral sending
-      alert(`Referral sent to ${referralEmail}!`)
-      setReferralEmail("")
+      const loyaltyData = await loyaltyResponse.json()
+      const historyData = await historyResponse.json()
+      const rewardsData = await rewardsResponse.json()
+
+      if (loyaltyData.success) {
+        setUserData(loyaltyData.data)
+      }
+      if (historyData.success) {
+        setPointsHistory(historyData.data)
+      }
+      if (rewardsData.success) {
+        setRewardOptions(rewardsData.data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch rewards data:', error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const redeemReward = (reward: (typeof rewardOptions)[0]) => {
-    if (mockUserData.points >= reward.points) {
-      alert(`Redeemed ${reward.name} for ${reward.points} points!`)
+  useEffect(() => {
+    fetchRewardsData()
+  }, [user])
+
+  const currentTier = userData ? loyaltyTiers.find((tier) => tier.name === userData.tier) : null
+  const nextTier = userData ? loyaltyTiers.find((tier) => tier.name === userData.nextTier) : null
+  const tierProgress = nextTier && userData
+    ? ((userData.points - (currentTier?.minPoints || 0)) / (nextTier.minPoints - (currentTier?.minPoints || 0))) * 100
+    : 0
+
+  const copyReferralCode = () => {
+    if (userData) {
+      navigator.clipboard.writeText(`Use my referral code: ${userData.referralCode} and get 50 bonus points!`)
+      setCopiedReferral(true)
+      setTimeout(() => setCopiedReferral(false), 2000)
+    }
+  }
+
+  const sendReferral = async () => {
+    if (referralEmail && userData && token) {
+      try {
+        const response = await fetch('/api/rewards/referral', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ email: referralEmail }),
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          alert(`Referral sent to ${referralEmail}!`)
+          setReferralEmail("")
+          fetchRewardsData()
+        } else {
+          alert(data.message || 'Failed to send referral')
+        }
+      } catch (error) {
+        console.error('Failed to send referral:', error)
+      }
+    }
+  }
+
+  const redeemReward = async (reward: RewardOption) => {
+    if (!userData || !token) return
+
+    if (userData.points >= reward.points) {
+      try {
+        const response = await fetch('/api/rewards/redeem', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ rewardId: reward.id }),
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          alert(`Redeemed ${reward.name} for ${reward.points} points!`)
+          fetchRewardsData()
+        } else {
+          alert(data.message || 'Failed to redeem reward')
+        }
+      } catch (error) {
+        console.error('Failed to redeem reward:', error)
+      }
     } else {
-      alert(`You need ${reward.points - mockUserData.points} more points to redeem this reward.`)
+      alert(`You need ${reward.points - userData.points} more points to redeem this reward.`)
     }
   }
 
@@ -180,7 +225,7 @@ export default function RewardsPage() {
                   Login
                 </Button>
               </Link>
-              <CartDrawer />
+              <CartDrawer refreshTrigger={0} />
             </div>
           </div>
         </div>
@@ -205,12 +250,12 @@ export default function RewardsPage() {
             <CardHeader>
               <div className="flex items-center justify-center gap-2 mb-2">
                 <Zap className="h-6 w-6 text-orange-600" />
-                <CardTitle className="text-2xl">{mockUserData.points.toLocaleString()}</CardTitle>
+                <CardTitle className="text-2xl">{userData?.points.toLocaleString() || 0}</CardTitle>
               </div>
               <CardDescription>Available Points</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">= LKR {(mockUserData.points * 5).toLocaleString()} value</p>
+              <p className="text-sm text-muted-foreground">= LKR {((userData?.points || 0) * 5).toLocaleString()} value</p>
             </CardContent>
           </Card>
 
@@ -218,19 +263,19 @@ export default function RewardsPage() {
             <CardHeader>
               <div className="flex items-center justify-center gap-2 mb-2">
                 <Award className="h-6 w-6 text-orange-600" />
-                <CardTitle className="text-2xl">{mockUserData.tier}</CardTitle>
+                <CardTitle className="text-2xl">{userData?.tier || 'Bronze'}</CardTitle>
               </div>
               <CardDescription>Current Tier</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>{mockUserData.tier}</span>
-                  <span>{mockUserData.nextTier}</span>
+                  <span>{userData?.tier || 'Bronze'}</span>
+                  <span>{userData?.nextTier || 'Silver'}</span>
                 </div>
                 <Progress value={tierProgress} className="h-2" />
                 <p className="text-xs text-muted-foreground">
-                  {mockUserData.pointsToNextTier} points to {mockUserData.nextTier}
+                  {userData?.pointsToNextTier || 0} points to {userData?.nextTier || 'Silver'}
                 </p>
               </div>
             </CardContent>
@@ -240,7 +285,7 @@ export default function RewardsPage() {
             <CardHeader>
               <div className="flex items-center justify-center gap-2 mb-2">
                 <TrendingUp className="h-6 w-6 text-orange-600" />
-                <CardTitle className="text-2xl">{mockUserData.totalEarned.toLocaleString()}</CardTitle>
+                <CardTitle className="text-2xl">{userData?.totalEarned.toLocaleString() || 0}</CardTitle>
               </div>
               <CardDescription>Total Points Earned</CardDescription>
             </CardHeader>
@@ -261,17 +306,17 @@ export default function RewardsPage() {
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-4 gap-4">
-              {loyaltyTiers.map((tier, index) => (
+                  {loyaltyTiers.map((tier, index) => (
                 <div
                   key={tier.name}
                   className={`p-4 rounded-lg border-2 transition-colors ${
-                    tier.name === mockUserData.tier ? "border-orange-500 bg-orange-50" : "border-border bg-background"
+                    tier.name === userData?.tier ? "border-orange-500 bg-orange-50" : "border-border bg-background"
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-3">
                     <div className={`w-4 h-4 rounded-full ${tier.color}`} />
                     <h3 className="font-semibold">{tier.name}</h3>
-                    {tier.name === mockUserData.tier && (
+                    {tier.name === userData?.tier && (
                       <Badge className="bg-orange-600 hover:bg-orange-700">Current</Badge>
                     )}
                   </div>
@@ -309,29 +354,29 @@ export default function RewardsPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {rewardOptions.map((reward) => (
-                    <Card key={reward.id} className="relative">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <h3 className="font-semibold text-sm">{reward.name}</h3>
-                            <p className="text-xs text-muted-foreground">{reward.description}</p>
-                          </div>
-                          <Badge variant="outline" className="text-xs">
-                            {reward.points} pts
-                          </Badge>
-                        </div>
-                        <Button
-                          size="sm"
-                          className="w-full"
-                          disabled={mockUserData.points < reward.points}
-                          onClick={() => redeemReward(reward)}
-                        >
-                          {mockUserData.points >= reward.points ? "Redeem" : "Not enough points"}
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
+                          {rewardOptions.map((reward) => (
+                            <Card key={reward.id} className="relative">
+                              <CardContent className="p-4">
+                                <div className="flex items-start justify-between mb-3">
+                                  <div>
+                                    <h3 className="font-semibold text-sm">{reward.name}</h3>
+                                    <p className="text-xs text-muted-foreground">{reward.description}</p>
+                                  </div>
+                                  <Badge variant="outline" className="text-xs">
+                                    {reward.points} pts
+                                  </Badge>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  className="w-full"
+                                  disabled={userData?.points! < reward.points}
+                                  onClick={() => redeemReward(reward)}
+                                >
+                                  {userData?.points! >= reward.points ? "Redeem" : "Not enough points"}
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          ))}
                 </div>
               </CardContent>
             </Card>
@@ -419,11 +464,11 @@ export default function RewardsPage() {
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4 text-center">
                     <div>
-                      <p className="text-2xl font-bold text-orange-600">{mockUserData.referralsCount}</p>
+                      <p className="text-2xl font-bold text-orange-600">{userData?.referralsCount || 0}</p>
                       <p className="text-sm text-muted-foreground">Friends Referred</p>
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-green-600">{mockUserData.referralsCount * 50}</p>
+                      <p className="text-2xl font-bold text-green-600">{(userData?.referralsCount || 0) * 50}</p>
                       <p className="text-sm text-muted-foreground">Points Earned</p>
                     </div>
                   </div>
@@ -432,7 +477,7 @@ export default function RewardsPage() {
                     <div>
                       <Label htmlFor="referralCode">Your Referral Code</Label>
                       <div className="flex gap-2 mt-1">
-                        <Input id="referralCode" value={mockUserData.referralCode} readOnly className="font-mono" />
+                        <Input id="referralCode" value={userData?.referralCode || ""} readOnly className="font-mono" />
                         <Button variant="outline" onClick={copyReferralCode}>
                           {copiedReferral ? "Copied!" : <Copy className="h-4 w-4" />}
                         </Button>

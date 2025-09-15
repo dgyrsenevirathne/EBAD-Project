@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,118 +11,59 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowLeft, User, MapPin, ShoppingBag, Gift, Heart, Edit, Plus, Star } from "lucide-react"
 import { CartDrawer } from "@/components/cart-drawer"
+import { useAuth } from "@/components/auth-provider"
+import { useRouter } from "next/navigation"
 
-// Mock user data
-const mockUser = {
-  firstName: "Priya",
-  lastName: "Fernando",
-  email: "priya.fernando@email.com",
-  phone: "+94 71 234 5678",
-  loyaltyPoints: 1250,
-  tier: "Gold",
-  totalOrders: 12,
-  totalSpent: 45000,
+interface Address {
+  id: number
+  firstName: string
+  lastName: string
+  addressLine1: string
+  addressLine2: string
+  city: string
+  province: string
+  postalCode: string
+  isDefault: boolean
 }
 
-const mockAddresses = [
-  {
-    id: 1,
-    firstName: "Priya",
-    lastName: "Fernando",
-    addressLine1: "123 Galle Road",
-    addressLine2: "Apartment 4B",
-    city: "Colombo",
-    province: "Western",
-    postalCode: "00300",
-    isDefault: true,
-  },
-  {
-    id: 2,
-    firstName: "Priya",
-    lastName: "Fernando",
-    addressLine1: "456 Kandy Road",
-    addressLine2: "",
-    city: "Kandy",
-    province: "Central",
-    postalCode: "20000",
-    isDefault: false,
-  },
-]
+interface Order {
+  id: string
+  date: string
+  status: string
+  total: number
+  items: number
+  trackingNumber: string | null
+}
 
-const mockOrders = [
-  {
-    id: "ORD001",
-    date: "2024-01-15",
-    status: "delivered",
-    total: 12500,
-    items: 2,
-    trackingNumber: "TRK123456789",
-  },
-  {
-    id: "ORD002",
-    date: "2024-01-10",
-    status: "shipped",
-    total: 8500,
-    items: 1,
-    trackingNumber: "TRK987654321",
-  },
-  {
-    id: "ORD003",
-    date: "2024-01-05",
-    status: "processing",
-    total: 15000,
-    items: 3,
-    trackingNumber: null,
-  },
-]
-
-const mockWishlist = [
-  {
-    id: 1,
-    name: "Wedding Osariya",
-    price: 25000,
-    originalPrice: 28000,
-    image: "/sri-lankan-wedding-osariya.png",
-    inStock: true,
-  },
-  {
-    id: 2,
-    name: "Men's Batik Shirt",
-    price: 3500,
-    originalPrice: null,
-    image: "/sri-lankan-batik-shirt.png",
-    inStock: true,
-  },
-  {
-    id: 3,
-    name: "Traditional Kandyan Saree",
-    price: 12500,
-    originalPrice: 15000,
-    image: "/traditional-kandyan-saree.png",
-    inStock: false,
-  },
-]
-
-const provinces = [
-  "Western",
-  "Central",
-  "Southern",
-  "Northern",
-  "Eastern",
-  "North Western",
-  "North Central",
-  "Uva",
-  "Sabaragamuwa",
-]
+interface WishlistItem {
+  id: number
+  name: string
+  price: number
+  originalPrice: number | null
+  image: string | null
+  inStock: boolean
+}
 
 export default function ProfilePage() {
+  const { user, token, logout } = useAuth()
+  const router = useRouter()
   const [editingProfile, setEditingProfile] = useState(false)
   const [editingAddress, setEditingAddress] = useState<number | null>(null)
   const [showAddAddress, setShowAddAddress] = useState(false)
 
-  const [profileData, setProfileData] = useState(mockUser)
-  const [addresses, setAddresses] = useState(mockAddresses)
-  const [newAddress, setNewAddress] = useState({
+  const [profileData, setProfileData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    loyaltyPoints: 0,
+    tier: "",
+    totalOrders: 0,
+    totalSpent: 0,
+  })
+  const [addresses, setAddresses] = useState<Address[]>([])
+  const [newAddress, setNewAddress] = useState<Address>({
+    id: 0,
     firstName: "",
     lastName: "",
     addressLine1: "",
@@ -132,6 +73,20 @@ export default function ProfilePage() {
     postalCode: "",
     isDefault: false,
   })
+  const [orders, setOrders] = useState<Order[]>([])
+  const [wishlist, setWishlist] = useState<WishlistItem[]>([])
+
+  const provinces = [
+    "Western",
+    "Central",
+    "Southern",
+    "Northern",
+    "Eastern",
+    "North Western",
+    "North Central",
+    "Uva",
+    "Sabaragamuwa",
+  ]
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -148,32 +103,127 @@ export default function ProfilePage() {
     }
   }
 
-  const saveProfile = () => {
-    setEditingProfile(false)
-    // Mock save
-    console.log("Profile saved:", profileData)
+  const handleLogout = async () => {
+    await logout()
+    router.push('/')
   }
 
-  const saveAddress = (addressId: number) => {
-    setEditingAddress(null)
-    // Mock save
-    console.log("Address saved:", addressId)
+  const fetchProfile = async () => {
+    if (!user || !token) return
+
+    try {
+      const response = await fetch('/api/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setProfileData(data.data.profile)
+        setAddresses(data.data.addresses)
+        setOrders(data.data.orders)
+        setWishlist(data.data.wishlist)
+      }
+    } catch (error) {
+      console.error('Failed to fetch profile:', error)
+    }
   }
 
-  const addNewAddress = () => {
-    const newId = Math.max(...addresses.map((a) => a.id)) + 1
-    setAddresses([...addresses, { ...newAddress, id: newId }])
-    setNewAddress({
-      firstName: "",
-      lastName: "",
-      addressLine1: "",
-      addressLine2: "",
-      city: "",
-      province: "",
-      postalCode: "",
-      isDefault: false,
-    })
-    setShowAddAddress(false)
+  useEffect(() => {
+    fetchProfile()
+  }, [user])
+
+  const saveProfile = async () => {
+    if (!user || !token) return
+
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(profileData),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setEditingProfile(false)
+      } else {
+        alert(data.message || 'Failed to save profile')
+      }
+    } catch (error) {
+      console.error('Failed to save profile:', error)
+    }
+  }
+
+  const saveAddress = async (addressId: number) => {
+    if (!user || !token) return
+
+    try {
+      const addressToSave = addresses.find((a) => a.id === addressId)
+      if (!addressToSave) return
+
+      const response = await fetch('/api/addresses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(addressToSave),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setEditingAddress(null)
+        fetchProfile()
+      } else {
+        alert(data.message || 'Failed to save address')
+      }
+    } catch (error) {
+      console.error('Failed to save address:', error)
+    }
+  }
+
+  const addNewAddress = async () => {
+    if (!user || !token) return
+
+    try {
+      const response = await fetch('/api/addresses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(newAddress),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setShowAddAddress(false)
+        setNewAddress({
+          id: 0,
+          firstName: "",
+          lastName: "",
+          addressLine1: "",
+          addressLine2: "",
+          city: "",
+          province: "",
+          postalCode: "",
+          isDefault: false,
+        })
+        fetchProfile()
+      } else {
+        alert(data.message || 'Failed to add address')
+      }
+    } catch (error) {
+      console.error('Failed to add address:', error)
+    }
   }
 
   return (
@@ -195,10 +245,13 @@ export default function ProfilePage() {
               <Link href="/rewards">
                 <Button variant="outline" size="sm" className="bg-transparent">
                   <Gift className="h-4 w-4 mr-2" />
-                  {mockUser.loyaltyPoints} pts
+                  {profileData.loyaltyPoints} pts
                 </Button>
               </Link>
-              <CartDrawer />
+              <Button variant="outline" size="sm" onClick={handleLogout} className="bg-transparent">
+                Logout
+              </Button>
+              <CartDrawer refreshTrigger={0} />
             </div>
           </div>
         </div>
@@ -212,14 +265,14 @@ export default function ProfilePage() {
           </div>
           <div>
             <h2 className="text-2xl font-bold">
-              {mockUser.firstName} {mockUser.lastName}
+              {profileData.firstName} {profileData.lastName}
             </h2>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span>{mockUser.tier} Member</span>
+              <span>{profileData.tier} Member</span>
               <span>•</span>
-              <span>{mockUser.totalOrders} Orders</span>
+              <span>{profileData.totalOrders} Orders</span>
               <span>•</span>
-              <span>LKR {mockUser.totalSpent.toLocaleString()} Spent</span>
+              <span>LKR {profileData.totalSpent.toLocaleString()} Spent</span>
             </div>
           </div>
         </div>
@@ -229,29 +282,27 @@ export default function ProfilePage() {
           <Card className="text-center">
             <CardContent className="p-4">
               <Gift className="h-6 w-6 text-orange-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold">{mockUser.loyaltyPoints}</p>
+              <p className="text-2xl font-bold">{profileData.loyaltyPoints}</p>
               <p className="text-sm text-muted-foreground">Loyalty Points</p>
             </CardContent>
           </Card>
           <Card className="text-center">
             <CardContent className="p-4">
               <ShoppingBag className="h-6 w-6 text-blue-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold">{mockUser.totalOrders}</p>
+              <p className="text-2xl font-bold">{profileData.totalOrders}</p>
               <p className="text-sm text-muted-foreground">Total Orders</p>
             </CardContent>
           </Card>
           <Card className="text-center">
             <CardContent className="p-4">
               <Heart className="h-6 w-6 text-red-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold">{mockWishlist.length}</p>
+              <p className="text-2xl font-bold">{wishlist.length}</p>
               <p className="text-sm text-muted-foreground">Wishlist Items</p>
             </CardContent>
           </Card>
           <Card className="text-center">
             <CardContent className="p-4">
               <Star className="h-6 w-6 text-yellow-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold">{mockUser.tier}</p>
-              <p className="text-sm text-muted-foreground">Member Tier</p>
             </CardContent>
           </Card>
         </div>
@@ -336,7 +387,7 @@ export default function ProfilePage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {mockOrders.map((order) => (
+                  {orders.map((order) => (
                     <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-4">
                         <div>
@@ -526,7 +577,7 @@ export default function ProfilePage() {
               </CardHeader>
               <CardContent>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {mockWishlist.map((item) => (
+                  {wishlist.map((item) => (
                     <Card key={item.id} className="group">
                       <div className="aspect-square relative overflow-hidden rounded-t-lg">
                         <img

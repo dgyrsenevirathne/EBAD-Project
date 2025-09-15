@@ -1,53 +1,172 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { ShoppingBag, Minus, Plus, Trash2 } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
 
-// Mock cart data - in real app this would come from context/state management
-const mockCartItems = [
-  {
-    id: 1,
-    name: "Traditional Kandyan Saree",
-    price: 12500,
-    image: "/traditional-kandyan-saree.png",
-    color: "Red",
-    size: "M",
-    quantity: 1,
-  },
-  {
-    id: 2,
-    name: "Men's Batik Shirt",
-    price: 3500,
-    image: "/sri-lankan-batik-shirt.png",
-    color: "Blue",
-    size: "L",
-    quantity: 2,
-  },
-]
+interface CartItem {
+  CartID: number
+  ProductID: number
+  VariantID: number | null
+  Quantity: number
+  ProductName: string
+  BasePrice: number
+  WholesalePrice: number | null
+  Size: string | null
+  Color: string | null
+  Stock: number
+  ImageURL: string | null
+}
 
-export function CartDrawer() {
-  const [cartItems, setCartItems] = useState(mockCartItems)
+export function CartDrawer({ refreshTrigger }: { refreshTrigger?: number }) {
+  const { user, token } = useAuth()
+  const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [isOpen, setIsOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const updateQuantity = (id: number, newQuantity: number) => {
+  const fetchCart = async () => {
+    if (user && token) {
+      // Fetch from API for logged-in users
+      try {
+        const response = await fetch('/api/cart', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          setCartItems(data.data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch cart:', error)
+      }
+    } else {
+      // Load from localStorage for guests
+      const guestCart = localStorage.getItem('guestCart')
+      if (guestCart) {
+        try {
+          const parsedCart = JSON.parse(guestCart)
+          // Fix: Ensure product name and price are present in guest cart items
+          const fixedCart = parsedCart.map((item: any) => ({
+            ...item,
+            ProductName: item.ProductName || 'Product',
+            BasePrice: item.BasePrice || 0,
+          }))
+          setCartItems(fixedCart)
+        } catch (error) {
+          console.error('Failed to parse guest cart:', error)
+          setCartItems([])
+        }
+      } else {
+        setCartItems([])
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchCart()
+    }
+  }, [isOpen, user])
+
+  useEffect(() => {
+    if (refreshTrigger) {
+      fetchCart()
+    }
+  }, [refreshTrigger, user])
+
+  const updateQuantity = async (cartId: number, newQuantity: number) => {
     if (newQuantity <= 0) {
-      removeItem(id)
+      await removeItem(cartId)
       return
     }
-    setCartItems(cartItems.map((item) => (item.id === id ? { ...item, quantity: newQuantity } : item)))
+
+    if (user && token) {
+      // Update via API for logged-in users
+      try {
+        const response = await fetch(`/api/cart/${cartId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ quantity: newQuantity }),
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          setCartItems(cartItems.map((item) => (item.CartID === cartId ? { ...item, Quantity: newQuantity } : item)))
+        } else {
+          alert(data.message || 'Failed to update quantity')
+        }
+      } catch (error) {
+        console.error('Failed to update quantity:', error)
+        alert('Failed to update quantity')
+      }
+    } else {
+      // Update in localStorage for guests
+      const guestCart = localStorage.getItem('guestCart')
+      if (guestCart) {
+        try {
+          let cartItems: CartItem[] = JSON.parse(guestCart)
+          cartItems = cartItems.map((item) => (item.CartID === cartId ? { ...item, Quantity: newQuantity } : item))
+          localStorage.setItem('guestCart', JSON.stringify(cartItems))
+          setCartItems(cartItems)
+        } catch (error) {
+          console.error('Failed to update guest cart:', error)
+        }
+      }
+    }
   }
 
-  const removeItem = (id: number) => {
-    setCartItems(cartItems.filter((item) => item.id !== id))
+  const removeItem = async (cartId: number) => {
+    if (user && token) {
+      // Remove via API for logged-in users
+      try {
+        const response = await fetch(`/api/cart/${cartId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          setCartItems(cartItems.filter((item) => item.CartID !== cartId))
+        } else {
+          alert(data.message || 'Failed to remove item')
+        }
+      } catch (error) {
+        console.error('Failed to remove item:', error)
+        alert('Failed to remove item')
+      }
+    } else {
+      // Remove from localStorage for guests
+      const guestCart = localStorage.getItem('guestCart')
+      if (guestCart) {
+        try {
+          let cartItems: CartItem[] = JSON.parse(guestCart)
+          cartItems = cartItems.filter((item) => item.CartID !== cartId)
+          localStorage.setItem('guestCart', JSON.stringify(cartItems))
+          setCartItems(cartItems)
+        } catch (error) {
+          console.error('Failed to remove from guest cart:', error)
+        }
+      }
+    }
   }
 
-  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
+  const subtotal = cartItems.reduce((sum, item) => sum + item.BasePrice * item.Quantity, 0)
+  const totalItems = cartItems.reduce((sum, item) => sum + item.Quantity, 0)
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -81,36 +200,36 @@ export function CartDrawer() {
             <>
               <div className="flex-1 overflow-y-auto py-4 space-y-4">
                 {cartItems.map((item) => (
-                  <div key={item.id} className="flex gap-3 p-3 border rounded-lg">
+                  <div key={item.CartID} className="flex gap-3 p-3 border rounded-lg">
                     <img
-                      src={item.image || "/placeholder.svg"}
-                      alt={item.name}
+                      src={item.ImageURL || "/placeholder.svg"}
+                      alt={item.ProductName}
                       className="w-16 h-16 object-cover rounded-md"
                     />
                     <div className="flex-1 space-y-1">
-                      <h4 className="font-medium text-sm line-clamp-2">{item.name}</h4>
+                      <h4 className="font-medium text-sm line-clamp-2">{item.ProductName}</h4>
                       <div className="flex gap-2 text-xs text-muted-foreground">
-                        <span>{item.color}</span>
+                        <span>{item.Color}</span>
                         <span>•</span>
-                        <span>{item.size}</span>
+                        <span>{item.Size}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="font-semibold text-sm">LKR {item.price.toLocaleString()}</span>
+                        <span className="font-semibold text-sm">LKR {item.BasePrice.toLocaleString()}</span>
                         <div className="flex items-center gap-1">
                           <Button
                             variant="outline"
                             size="sm"
                             className="h-6 w-6 p-0 bg-transparent"
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            onClick={() => updateQuantity(item.CartID, item.Quantity - 1)}
                           >
                             <Minus className="h-3 w-3" />
                           </Button>
-                          <span className="w-8 text-center text-sm">{item.quantity}</span>
+                          <span className="w-8 text-center text-sm">{item.Quantity}</span>
                           <Button
                             variant="outline"
                             size="sm"
                             className="h-6 w-6 p-0 bg-transparent"
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            onClick={() => updateQuantity(item.CartID, item.Quantity + 1)}
                           >
                             <Plus className="h-3 w-3" />
                           </Button>
@@ -118,7 +237,7 @@ export function CartDrawer() {
                             variant="outline"
                             size="sm"
                             className="h-6 w-6 p-0 ml-2 bg-transparent"
-                            onClick={() => removeItem(item.id)}
+                            onClick={() => removeItem(item.CartID)}
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>

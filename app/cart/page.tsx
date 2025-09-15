@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,46 +10,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Minus, Plus, Trash2, ShoppingBag, Gift, Truck, CreditCard } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
 
-// Mock cart data
-const mockCartItems = [
-  {
-    id: 1,
-    productId: 1,
-    name: "Traditional Kandyan Saree",
-    price: 12500,
-    originalPrice: 15000,
-    image: "/traditional-kandyan-saree.png",
-    color: "Red",
-    size: "M",
-    quantity: 1,
-    stock: 15,
-  },
-  {
-    id: 2,
-    productId: 2,
-    name: "Men's Batik Shirt",
-    price: 3500,
-    originalPrice: null,
-    image: "/sri-lankan-batik-shirt.png",
-    color: "Blue",
-    size: "L",
-    quantity: 2,
-    stock: 8,
-  },
-  {
-    id: 3,
-    productId: 3,
-    name: "Kids Festival Dress",
-    price: 2800,
-    originalPrice: 3200,
-    image: "/sri-lankan-kids-festival-dress.png",
-    color: "Pink",
-    size: "3T",
-    quantity: 1,
-    stock: 22,
-  },
-]
+interface CartItem {
+  CartID: number
+  ProductID: number
+  VariantID: number | null
+  Quantity: number
+  ProductName: string
+  BasePrice: number
+  WholesalePrice: number | null
+  Size: string | null
+  Color: string | null
+  Stock: number
+  ImageURL: string | null
+}
 
 const provinces = [
   "Western",
@@ -72,7 +47,8 @@ const paymentMethods = [
 ]
 
 export default function CartPage() {
-  const [cartItems, setCartItems] = useState(mockCartItems)
+  const { user, token } = useAuth()
+  const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [promoCode, setPromoCode] = useState("")
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number } | null>(null)
   const [loyaltyPoints, setLoyaltyPoints] = useState(250)
@@ -89,18 +65,134 @@ export default function CartPage() {
   })
   const [selectedPayment, setSelectedPayment] = useState("cod")
 
-  const updateQuantity = (id: number, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeItem(id)
-      return
+  const fetchCart = async () => {
+    if (user && token) {
+      // Fetch from API for logged-in users
+      try {
+        const response = await fetch('/api/cart', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          setCartItems(data.data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch cart:', error)
+      }
+    } else {
+      // Load from localStorage for guests
+      const guestCart = localStorage.getItem('guestCart')
+      if (guestCart) {
+        try {
+          const parsedCart = JSON.parse(guestCart)
+          setCartItems(parsedCart)
+        } catch (error) {
+          console.error('Failed to parse guest cart:', error)
+          setCartItems([])
+        }
+      } else {
+        setCartItems([])
+      }
     }
-    setCartItems(
-      cartItems.map((item) => (item.id === id ? { ...item, quantity: Math.min(newQuantity, item.stock) } : item)),
-    )
   }
 
-  const removeItem = (id: number) => {
-    setCartItems(cartItems.filter((item) => item.id !== id))
+  useEffect(() => {
+    fetchCart()
+  }, [user])
+
+  const updateQuantity = async (cartId: number, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      removeItem(cartId)
+      return
+    }
+
+    if (user && token) {
+      // Update via API for logged-in users
+      try {
+        const response = await fetch('/api/cart', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            productId: cartItems.find(item => item.CartID === cartId)?.ProductID,
+            variantId: cartItems.find(item => item.CartID === cartId)?.VariantID,
+            quantity: newQuantity,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          fetchCart()
+        } else {
+          alert(data.message || 'Failed to update quantity')
+        }
+      } catch (error) {
+        console.error('Failed to update quantity:', error)
+      }
+    } else {
+      // Update in localStorage for guests
+      const guestCart = localStorage.getItem('guestCart')
+      if (guestCart) {
+        try {
+          let cartItems: CartItem[] = JSON.parse(guestCart)
+          cartItems = cartItems.map((item) => (item.CartID === cartId ? { ...item, Quantity: newQuantity } : item))
+          localStorage.setItem('guestCart', JSON.stringify(cartItems))
+          setCartItems(cartItems)
+        } catch (error) {
+          console.error('Failed to update guest cart:', error)
+        }
+      }
+    }
+  }
+
+  const removeItem = async (cartId: number) => {
+    if (user && token) {
+      // Remove via API for logged-in users
+      try {
+        const response = await fetch('/api/cart', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            productId: cartItems.find(item => item.CartID === cartId)?.ProductID,
+            variantId: cartItems.find(item => item.CartID === cartId)?.VariantID,
+            quantity: 0,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          fetchCart()
+        } else {
+          alert(data.message || 'Failed to remove item')
+        }
+      } catch (error) {
+        console.error('Failed to remove item:', error)
+      }
+    } else {
+      // Remove from localStorage for guests
+      const guestCart = localStorage.getItem('guestCart')
+      if (guestCart) {
+        try {
+          let cartItems: CartItem[] = JSON.parse(guestCart)
+          cartItems = cartItems.filter((item) => item.CartID !== cartId)
+          localStorage.setItem('guestCart', JSON.stringify(cartItems))
+          setCartItems(cartItems)
+        } catch (error) {
+          console.error('Failed to remove from guest cart:', error)
+        }
+      }
+    }
   }
 
   const applyPromoCode = () => {
@@ -116,17 +208,85 @@ export default function CartPage() {
     }
   }
 
-  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const savings = cartItems.reduce(
-    (sum, item) => sum + (item.originalPrice ? (item.originalPrice - item.price) * item.quantity : 0),
-    0,
-  )
+  const subtotal = cartItems.reduce((sum, item) => sum + item.BasePrice * item.Quantity, 0)
+  const savings = 0 // Could be calculated if original prices are available
   const promoDiscount = appliedPromo?.discount || 0
   const pointsDiscount = usePoints ? Math.min(loyaltyPoints * 5, subtotal * 0.2) : 0 // 1 point = LKR 5, max 20% of subtotal
   const shippingCost = subtotal >= 5000 ? 0 : 500
   const total = subtotal - promoDiscount - pointsDiscount + shippingCost
 
   const pointsToEarn = Math.floor(total / 100) // 1 point per LKR 100
+
+  const handlePlaceOrder = async () => {
+    // Validate required fields
+    if (!shippingAddress.firstName || !shippingAddress.lastName || !shippingAddress.addressLine1 ||
+        !shippingAddress.city || !shippingAddress.province || !shippingAddress.postalCode || !shippingAddress.phone) {
+      alert('Please fill in all shipping address fields')
+      return
+    }
+
+    if (!selectedPayment) {
+      alert('Please select a payment method')
+      return
+    }
+
+    try {
+      const orderData = {
+        cartItems,
+        shippingAddress,
+        paymentMethod: selectedPayment,
+        promoCode: appliedPromo?.code || null,
+        useLoyaltyPoints: usePoints,
+        loyaltyPointsAvailable: loyaltyPoints,
+      }
+
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(user && token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(orderData),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert(`Order placed successfully! Order Number: ${data.orderNumber}`)
+
+        // Clear cart
+        if (user && token) {
+          // For logged-in users, clear cart via API (if implemented)
+          // For now, just refresh the cart
+          fetchCart()
+        } else {
+          // For guests, clear localStorage
+          localStorage.removeItem('guestCart')
+          setCartItems([])
+        }
+
+        // Reset form
+        setShippingAddress({
+          firstName: "",
+          lastName: "",
+          addressLine1: "",
+          addressLine2: "",
+          city: "",
+          province: "",
+          postalCode: "",
+          phone: "",
+        })
+        setSelectedPayment("cod")
+        setAppliedPromo(null)
+        setUsePoints(false)
+      } else {
+        alert(data.message || 'Failed to place order')
+      }
+    } catch (error) {
+      console.error('Failed to place order:', error)
+      alert('Failed to place order')
+    }
+  }
 
   if (cartItems.length === 0) {
     return (
@@ -176,7 +336,7 @@ export default function CartPage() {
               <h1 className="text-2xl font-bold text-primary">Ceylon Threads</h1>
             </div>
             <Badge variant="secondary" className="bg-orange-100 text-orange-800">
-              {cartItems.reduce((sum, item) => sum + item.quantity, 0)} items
+              {cartItems.reduce((sum, item) => sum + item.Quantity, 0)} items
             </Badge>
           </div>
         </div>
@@ -195,24 +355,24 @@ export default function CartPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {cartItems.map((item) => (
-                  <div key={item.id} className="flex gap-4 p-4 border rounded-lg">
+                  <div key={item.CartID} className="flex gap-4 p-4 border rounded-lg">
                     <img
-                      src={item.image || "/placeholder.svg"}
-                      alt={item.name}
+                      src={item.ImageURL || "/placeholder.svg"}
+                      alt={item.ProductName}
                       className="w-20 h-20 object-cover rounded-md"
                     />
                     <div className="flex-1 space-y-2">
-                      <h3 className="font-semibold">{item.name}</h3>
+                      <h3 className="font-semibold">{item.ProductName}</h3>
                       <div className="flex gap-4 text-sm text-muted-foreground">
-                        <span>Color: {item.color}</span>
-                        <span>Size: {item.size}</span>
+                        <span>Color: {item.Color}</span>
+                        <span>Size: {item.Size}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold">LKR {item.price.toLocaleString()}</span>
-                          {item.originalPrice && (
+                          <span className="font-bold">LKR {item.BasePrice.toLocaleString()}</span>
+                          {item.WholesalePrice && (
                             <span className="text-sm text-muted-foreground line-through">
-                              LKR {item.originalPrice.toLocaleString()}
+                              LKR {item.WholesalePrice.toLocaleString()}
                             </span>
                           )}
                         </div>
@@ -220,25 +380,25 @@ export default function CartPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            onClick={() => updateQuantity(item.CartID, item.Quantity - 1)}
                           >
                             <Minus className="h-4 w-4" />
                           </Button>
-                          <span className="w-8 text-center">{item.quantity}</span>
+                          <span className="w-8 text-center">{item.Quantity}</span>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            disabled={item.quantity >= item.stock}
+                            onClick={() => updateQuantity(item.CartID, item.Quantity + 1)}
+                            disabled={item.Quantity >= item.Stock}
                           >
                             <Plus className="h-4 w-4" />
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => removeItem(item.id)}>
+                          <Button variant="outline" size="sm" onClick={() => removeItem(item.CartID)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
-                      {item.quantity >= item.stock && (
+                      {item.Quantity >= item.Stock && (
                         <p className="text-xs text-orange-600">Maximum available quantity reached</p>
                       )}
                     </div>
@@ -484,7 +644,7 @@ export default function CartPage() {
               </CardContent>
             </Card>
 
-            <Button size="lg" className="w-full">
+            <Button size="lg" className="w-full" onClick={handlePlaceOrder}>
               Place Order - LKR {total.toLocaleString()}
             </Button>
           </div>

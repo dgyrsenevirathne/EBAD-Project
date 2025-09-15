@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     const hashedPassword = await hash(password, 10);
 
     // Insert new user
-    await pool.request()
+    const userResult = await pool.request()
       .input('email', sql.VarChar, email)
       .input('phone', sql.VarChar, phone)
       .input('password', sql.VarChar, hashedPassword)
@@ -48,10 +48,33 @@ export async function POST(request: Request) {
           Email, Phone, Password, FirstName, LastName, UserType,
           IsActive, CreatedAt, UpdatedAt
         )
+        OUTPUT INSERTED.UserID
         VALUES (
           @email, @phone, @password, @firstName, @lastName, @userType,
           1, GETDATE(), GETDATE()
         )
+      `);
+
+    const userId = userResult.recordset[0].UserID;
+
+    // Initialize loyalty program with 100 welcome points
+    await pool.request()
+      .input('userId', sql.Int, userId)
+      .input('initialPoints', sql.Int, 100)
+      .query(`
+        INSERT INTO LoyaltyProgram (UserID, Points, TotalEarned, TotalSpent)
+        VALUES (@userId, @initialPoints, @initialPoints, 0)
+      `);
+
+    // Record the initial points transaction
+    await pool.request()
+      .input('userId', sql.Int, userId)
+      .input('points', sql.Int, 100)
+      .input('transactionType', sql.NVarChar, 'registration')
+      .input('description', sql.NVarChar, 'Welcome bonus points for new account')
+      .query(`
+        INSERT INTO LoyaltyTransactions (UserID, Points, TransactionType, Description)
+        VALUES (@userId, @points, @transactionType, @description)
       `);
 
     return NextResponse.json(
