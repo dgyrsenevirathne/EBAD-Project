@@ -90,13 +90,15 @@ export async function GET(request: NextRequest) {
     const wishlistResult = await pool.request()
       .input('userID', sql.Int, user.UserID)
       .query(`
-        SELECT w.WishlistID as id, p.ProductName as name, p.BasePrice as price, NULL as originalPrice,
-               pi.ImageURL as image, CASE WHEN pv.Stock > 0 THEN 1 ELSE 0 END as inStock
+        SELECT DISTINCT w.WishlistID as id, p.ProductName as name, p.BasePrice as price, NULL as originalPrice,
+               pi.ImageURL as image,
+               CASE WHEN EXISTS (
+                 SELECT 1 FROM ProductVariants pv WHERE pv.ProductID = p.ProductID AND pv.Stock > 0 AND pv.IsActive = 1
+               ) THEN 1 ELSE 0 END as inStock
         FROM Wishlist w
         JOIN Products p ON w.ProductID = p.ProductID
         LEFT JOIN ProductImages pi ON p.ProductID = pi.ProductID AND pi.IsPrimary = 1
-        LEFT JOIN ProductVariants pv ON p.ProductID = pv.ProductID
-        WHERE w.UserID = @userID
+        WHERE w.UserID = @userID AND p.IsActive = 1
       `);
 
     const profile = {

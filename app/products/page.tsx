@@ -167,6 +167,37 @@ export default function ProductsPage() {
     }
   }
 
+  const addToWishlist = async (productId: number) => {
+    if (!user || !token) {
+      alert('Please login to add items to wishlist')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/wishlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          productId: productId,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert("Item added to wishlist successfully!")
+      } else {
+        alert(data.message || 'Failed to add item to wishlist')
+      }
+    } catch (error) {
+      console.error('Failed to add to wishlist:', error)
+      alert('Failed to add item to wishlist')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -183,6 +214,13 @@ export default function ProductsPage() {
               <h1 className="text-2xl font-bold text-primary">Ceylon Threads</h1>
             </div>
             <div className="flex items-center space-x-2">
+              {user && (
+                <Link href="/wishlist">
+                  <Button variant="ghost" size="sm">
+                    Wishlist
+                  </Button>
+                </Link>
+              )}
               <Link href="/login">
                 <Button variant="ghost" size="sm">
                   Login
@@ -357,6 +395,11 @@ export default function ProductsPage() {
                       variant="outline"
                       size="sm"
                       className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 hover:bg-white"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        addToWishlist(product.ProductID)
+                      }}
                     >
                       <Heart className="h-4 w-4" />
                     </Button>

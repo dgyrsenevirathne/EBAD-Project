@@ -55,6 +55,11 @@ export default function HomePage() {
               <Link href="/products" className="text-sm font-medium hover:text-primary transition-colors">
                 Shop
               </Link>
+              {user && (
+                <Link href="/wishlist" className="text-sm font-medium hover:text-primary transition-colors">
+                  Wishlist
+                </Link>
+              )}
               <Link href="/wholesale" className="text-sm font-medium hover:text-primary transition-colors">
                 Wholesale
               </Link>
