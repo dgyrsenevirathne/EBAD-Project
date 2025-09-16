@@ -57,13 +57,17 @@ export async function POST(request: Request) {
 
     const userId = userResult.recordset[0].UserID;
 
+    // Generate unique referral code
+    const referralCode = `REF${userId}`;
+
     // Initialize loyalty program with 100 welcome points
     await pool.request()
       .input('userId', sql.Int, userId)
       .input('initialPoints', sql.Int, 100)
+      .input('referralCode', sql.NVarChar, referralCode)
       .query(`
-        INSERT INTO LoyaltyProgram (UserID, Points, TotalEarned, TotalSpent)
-        VALUES (@userId, @initialPoints, @initialPoints, 0)
+        INSERT INTO LoyaltyProgram (UserID, Points, TotalEarned, TotalSpent, ReferralCode)
+        VALUES (@userId, @initialPoints, @initialPoints, 0, @referralCode)
       `);
 
     // Record the initial points transaction
