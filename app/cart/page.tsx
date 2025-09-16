@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Minus, Plus, Trash2, ShoppingBag, Gift, Truck, CreditCard } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
+import { FestivalBundleGenerator } from "@/components/festival-bundle-generator"
 
 interface CartItem {
   CartID: number
@@ -24,6 +25,7 @@ interface CartItem {
   Color: string | null
   Stock: number
   ImageURL: string | null
+  Festival: string | null
 }
 
 const provinces = [
@@ -406,6 +408,25 @@ export default function CartPage() {
                 ))}
               </CardContent>
             </Card>
+
+            {/* Festival Bundle Generator */}
+            <FestivalBundleGenerator
+              cartItems={cartItems}
+              onAddToCart={async (productId: number, quantity: number) => {
+                // Add item to cart
+                const response = await fetch('/api/cart', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(user && token ? { 'Authorization': `Bearer ${token}` } : {}),
+                  },
+                  body: JSON.stringify({ productId, quantity }),
+                })
+                if (response.ok) {
+                  fetchCart() // Refresh cart
+                }
+              }}
+            />
 
             {/* Shipping Address */}
             <Card>

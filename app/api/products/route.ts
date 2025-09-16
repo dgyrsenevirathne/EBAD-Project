@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
         p.*,
         c.CategoryName,
         pi.ImageURL as PrimaryImage,
+        p.Festival,
         (SELECT COUNT(*) FROM ProductVariants pv WHERE pv.ProductID = p.ProductID AND pv.IsActive = 1) as VariantCount,
         (SELECT SUM(pv.Stock) FROM ProductVariants pv WHERE pv.ProductID = p.ProductID AND pv.IsActive = 1) as TotalStock,
         (SELECT AVG(CAST(pr.Rating AS FLOAT)) FROM ProductRatings pr WHERE pr.ProductID = p.ProductID) as AverageRating,

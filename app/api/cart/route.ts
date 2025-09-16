@@ -35,6 +35,7 @@ async function getCart(request: NextRequest, user: any): Promise<Response> {
           p.ProductName,
           p.BasePrice,
           p.WholesalePrice,
+          p.Festival,
           pv.Size,
           pv.Color,
           pv.Stock,

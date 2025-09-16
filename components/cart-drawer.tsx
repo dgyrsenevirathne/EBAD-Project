@@ -21,6 +21,7 @@ interface CartItem {
   Color: string | null
   Stock: number
   ImageURL: string | null
+  Festival: string | null
 }
 
 export function CartDrawer({ refreshTrigger }: { refreshTrigger?: number }) {
