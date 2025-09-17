@@ -66,6 +66,7 @@ export default function CartPage() {
     phone: "",
   })
   const [selectedPayment, setSelectedPayment] = useState("cod")
+  const [stockWarningItems, setStockWarningItems] = useState<Set<number>>(new Set())
 
   const fetchCart = async () => {
     if (user && token) {
@@ -81,6 +82,14 @@ export default function CartPage() {
 
         if (data.success) {
           setCartItems(data.data)
+          // Check for items with quantity exceeding stock
+          const warningItems = new Set<number>()
+          data.data.forEach((item: CartItem) => {
+            if (item.Quantity > item.Stock) {
+              warningItems.add(item.CartID)
+            }
+          })
+          setStockWarningItems(warningItems)
         }
       } catch (error) {
         console.error('Failed to fetch cart:', error)
@@ -98,6 +107,7 @@ export default function CartPage() {
         }
       } else {
         setCartItems([])
+        setStockWarningItems(new Set())
       }
     }
   }
@@ -131,9 +141,23 @@ export default function CartPage() {
         const data = await response.json()
 
         if (data.success) {
+          // Remove from stockWarningItems if quantity is valid
+          const item = cartItems.find(item => item.CartID === cartId)
+          setStockWarningItems(prev => {
+            const newSet = new Set(prev)
+            if (item && newQuantity <= item.Stock) {
+              newSet.delete(cartId)
+            }
+            return newSet
+          })
           fetchCart()
         } else {
-          alert(data.message || 'Failed to update quantity')
+          if (data.message === "Maximum available quantity reached") {
+            // Add to stockWarningItems to show warning message
+            setStockWarningItems(prev => new Set(prev).add(cartId))
+          } else {
+            alert(data.message || 'Failed to update quantity')
+          }
         }
       } catch (error) {
         console.error('Failed to update quantity:', error)
@@ -144,9 +168,25 @@ export default function CartPage() {
       if (guestCart) {
         try {
           let cartItems: CartItem[] = JSON.parse(guestCart)
+          const item = cartItems.find(item => item.CartID === cartId)
+          if (item && newQuantity > item.Stock) {
+            // Add to stockWarningItems to show warning message
+            setStockWarningItems(prev => {
+              const newSet = new Set(prev)
+              newSet.add(cartId)
+              return newSet
+            })
+            return
+          }
           cartItems = cartItems.map((item) => (item.CartID === cartId ? { ...item, Quantity: newQuantity } : item))
           localStorage.setItem('guestCart', JSON.stringify(cartItems))
           setCartItems(cartItems)
+          // Remove from stockWarningItems if quantity is valid
+          setStockWarningItems(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(cartId)
+            return newSet
+          })
         } catch (error) {
           console.error('Failed to update guest cart:', error)
         }
@@ -400,7 +440,7 @@ export default function CartPage() {
                           </Button>
                         </div>
                       </div>
-                      {item.Quantity >= item.Stock && (
+                      {stockWarningItems.has(item.CartID) && (
                         <p className="text-xs text-orange-600">Maximum available quantity reached</p>
                       )}
                     </div>

@@ -38,7 +38,7 @@ async function getCart(request: NextRequest, user: any): Promise<Response> {
           p.Festival,
           pv.Size,
           pv.Color,
-          pv.Stock,
+          COALESCE(pv.Stock, 999999) AS Stock,
           pi.ImageURL
         FROM ShoppingCart sc
         JOIN Products p ON sc.ProductID = p.ProductID
@@ -100,7 +100,8 @@ async function addToCart(request: NextRequest, user: any): Promise<Response> {
       );
     }
 
-    // Check stock if variant is specified
+    // Check stock - if variant specified, use variant stock, otherwise check if product has variants
+    let availableStock = 0;
     if (variantId) {
       const variantResult = await pool.request()
         .input('variantID', sql.Int, parseInt(variantId))
@@ -117,12 +118,39 @@ async function addToCart(request: NextRequest, user: any): Promise<Response> {
         );
       }
 
-      if (variantResult.recordset[0].Stock < quantity) {
-        return NextResponse.json(
-          { success: false, message: 'Insufficient stock' },
-          { status: 400 }
-        );
+      availableStock = variantResult.recordset[0].Stock;
+    } else {
+      // Check if product has variants
+      const variantCheckResult = await pool.request()
+        .input('productID', sql.Int, parseInt(productId))
+        .query(`
+          SELECT COUNT(*) as VariantCount
+          FROM ProductVariants
+          WHERE ProductID = @productID AND IsActive = 1
+        `);
+
+      if (variantCheckResult.recordset[0].VariantCount > 0) {
+        // Product has variants, get total stock from all variants
+        const totalStockResult = await pool.request()
+          .input('productID', sql.Int, parseInt(productId))
+          .query(`
+            SELECT SUM(Stock) as TotalStock
+            FROM ProductVariants
+            WHERE ProductID = @productID AND IsActive = 1
+          `);
+
+        availableStock = totalStockResult.recordset[0]?.TotalStock || 0;
+      } else {
+        // Product has no variants, assume unlimited stock
+        availableStock = 999999; // Unlimited for products without variants
       }
+    }
+
+    if (availableStock < quantity) {
+      return NextResponse.json(
+        { success: false, message: 'Maximum available quantity reached' },
+        { status: 400 }
+      );
     }
 
     // Check if item already exists in cart
@@ -138,12 +166,10 @@ async function addToCart(request: NextRequest, user: any): Promise<Response> {
       `);
 
     if (existingResult.recordset.length > 0) {
-      // Update existing item
-      const newQuantity = existingResult.recordset[0].Quantity + quantity;
-
+      // Update existing item - quantity is the new total quantity
       await pool.request()
         .input('cartID', sql.Int, existingResult.recordset[0].CartID)
-        .input('quantity', sql.Int, newQuantity)
+        .input('quantity', sql.Int, quantity)
         .query(`
           UPDATE ShoppingCart
           SET Quantity = @quantity
