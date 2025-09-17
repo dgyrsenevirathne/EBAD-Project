@@ -6,7 +6,7 @@ import { AuthProvider } from '@/components/auth-provider'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
+  title: 'Ceylon Threads',
   description: 'Created with v0',
   generator: 'v0.app',
 }
