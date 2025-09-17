@@ -113,40 +113,8 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
         alert('Failed to add item to cart')
       }
     } else {
-      // Add to localStorage for guests
-      const guestCart = localStorage.getItem('guestCart')
-      let cartItems: any[] = []
-      if (guestCart) {
-        try {
-          cartItems = JSON.parse(guestCart)
-        } catch (error) {
-          console.error('Failed to parse guest cart:', error)
-        }
-      }
-
-      // Check if item already exists
-      const existingItem = cartItems.find(item => item.ProductID === product?.ProductID)
-      if (existingItem) {
-        existingItem.Quantity += quantity
-      } else {
-        // Add item with actual product details
-        cartItems.push({
-          CartID: Date.now(), // Temporary ID
-          ProductID: product?.ProductID,
-          VariantID: null,
-          Quantity: quantity,
-          ProductName: product?.ProductName || 'Product',
-          BasePrice: product?.BasePrice || 0,
-          WholesalePrice: null,
-          Size: null,
-          Color: null,
-          Stock: product?.variants?.[0]?.Stock || 0,
-          ImageURL: product?.images?.[0]?.ImageURL || null,
-        })
-      }
-
-      localStorage.setItem('guestCart', JSON.stringify(cartItems))
-      alert("Item added to cart successfully!")
+      // Prevent guest users from adding to cart
+      alert("Please create an account and login first to add items to cart")
     }
   }
 

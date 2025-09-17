@@ -128,42 +128,8 @@ export default function ProductsPage() {
         alert('Failed to add item to cart')
       }
     } else {
-      // Add to localStorage for guests
-      const guestCart = localStorage.getItem('guestCart')
-      let cartItems: any[] = []
-      if (guestCart) {
-        try {
-          cartItems = JSON.parse(guestCart)
-        } catch (error) {
-          console.error('Failed to parse guest cart:', error)
-        }
-      }
-
-      // Check if item already exists
-      const existingItem = cartItems.find(item => item.ProductID === productId)
-      if (existingItem) {
-        existingItem.Quantity += 1
-      } else {
-        // Find product details from products state
-        const product = products.find(p => p.ProductID === productId)
-        cartItems.push({
-          CartID: Date.now(), // Temporary ID
-          ProductID: productId,
-          VariantID: null,
-          Quantity: 1,
-          ProductName: product?.ProductName || 'Product',
-          BasePrice: product?.BasePrice || 0,
-          WholesalePrice: product?.WholesalePrice || null,
-          Size: null,
-          Color: null,
-          Stock: product?.TotalStock || 0,
-          ImageURL: product?.PrimaryImage || null,
-        })
-      }
-
-      localStorage.setItem('guestCart', JSON.stringify(cartItems))
-      alert("Item added to cart successfully!")
-      setCartRefreshTrigger(prev => prev + 1) // Trigger cart refresh
+      // Prevent guest users from adding to cart
+      alert("Please create an account and login first to add items to cart")
     }
   }
 
