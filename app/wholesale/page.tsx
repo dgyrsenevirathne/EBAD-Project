@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,97 +28,45 @@ import {
   MapPin,
 } from "lucide-react"
 import { CartDrawer } from "@/components/cart-drawer"
+import { useAuth } from "@/components/auth-provider"
 
-// Mock wholesale products with tiered pricing
-const mockWholesaleProducts = [
-  {
-    id: 1,
-    name: "Traditional Kandyan Saree",
-    sku: "TKS-001",
-    category: "Women",
-    basePrice: 12500,
-    image: "/traditional-kandyan-saree.png",
-    colors: ["Red", "Blue", "Gold"],
-    sizes: ["S", "M", "L", "XL"],
-    stock: 150,
-    minOrderQty: 10,
-    pricing: [
-      { minQty: 10, maxQty: 49, price: 10000, discount: "20%" },
-      { minQty: 50, maxQty: 99, price: 9375, discount: "25%" },
-      { minQty: 100, maxQty: null, price: 8750, discount: "30%" },
-    ],
-  },
-  {
-    id: 2,
-    name: "Men's Batik Shirt",
-    sku: "MBS-002",
-    category: "Men",
-    basePrice: 3500,
-    image: "/sri-lankan-batik-shirt.png",
-    colors: ["Blue", "Green", "Brown"],
-    sizes: ["S", "M", "L", "XL", "XXL"],
-    stock: 200,
-    minOrderQty: 20,
-    pricing: [
-      { minQty: 20, maxQty: 49, price: 2800, discount: "20%" },
-      { minQty: 50, maxQty: 99, price: 2625, discount: "25%" },
-      { minQty: 100, maxQty: null, price: 2450, discount: "30%" },
-    ],
-  },
-  {
-    id: 3,
-    name: "Kids Festival Dress",
-    sku: "KFD-003",
-    category: "Kids",
-    basePrice: 2800,
-    image: "/sri-lankan-kids-festival-dress.png",
-    colors: ["Pink", "Yellow", "White"],
-    sizes: ["2T", "3T", "4T", "5T"],
-    stock: 180,
-    minOrderQty: 25,
-    pricing: [
-      { minQty: 25, maxQty: 49, price: 2240, discount: "20%" },
-      { minQty: 50, maxQty: 99, price: 2100, discount: "25%" },
-      { minQty: 100, maxQty: null, price: 1960, discount: "30%" },
-    ],
-  },
-]
+interface WholesaleProduct {
+  id: number
+  name: string
+  sku: string
+  category: string
+  basePrice: number
+  minOrderQty: number
+  stock: number
+  image: string | null
+  pricing: Array<{
+    minQty: number
+    maxQty: number | null
+    price: number
+    discount: string
+  }>
+}
 
-const mockWholesaleOrders = [
-  {
-    id: "WHO001",
-    date: "2024-01-15",
-    status: "delivered",
-    total: 125000,
-    items: 50,
-    discount: 25000,
-    invoiceNumber: "INV-WHO001",
-  },
-  {
-    id: "WHO002",
-    date: "2024-01-10",
-    status: "shipped",
-    total: 87500,
-    items: 25,
-    discount: 12500,
-    invoiceNumber: "INV-WHO002",
-  },
-  {
-    id: "WHO003",
-    date: "2024-01-05",
-    status: "processing",
-    total: 156000,
-    items: 80,
-    discount: 34000,
-    invoiceNumber: null,
-  },
-]
+interface WholesaleOrder {
+  id: string
+  date: string
+  status: string
+  total: number
+  discount: number
+  invoiceNumber: string | null
+  items: number
+}
 
 export default function WholesalePage() {
+  const { user } = useAuth()
+  const [wholesaleProducts, setWholesaleProducts] = useState<WholesaleProduct[]>([])
+  const [wholesaleOrders, setWholesaleOrders] = useState<WholesaleOrder[]>([])
+  const [loading, setLoading] = useState(true)
+  const [ordersLoading, setOrdersLoading] = useState(false)
   const [quickOrderItems, setQuickOrderItems] = useState<
     Array<{ sku: string; quantity: number; color: string; size: string }>
   >([{ sku: "", quantity: 0, color: "", size: "" }])
-  const [selectedProduct, setSelectedProduct] = useState<(typeof mockWholesaleProducts)[0] | null>(null)
+  const [selectedProduct, setSelectedProduct] = useState<WholesaleProduct | null>(null)
   const [calculatorQty, setCalculatorQty] = useState(50)
   const [wholesaleInquiry, setWholesaleInquiry] = useState({
     companyName: "",
@@ -129,6 +77,45 @@ export default function WholesalePage() {
     expectedVolume: "",
     message: "",
   })
+
+  useEffect(() => {
+    const fetchWholesaleProducts = async () => {
+      try {
+        const response = await fetch('/api/wholesale/products')
+        const data = await response.json()
+        if (data.success) {
+          setWholesaleProducts(data.data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch wholesale products:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchWholesaleProducts()
+  }, [])
+
+  useEffect(() => {
+    const fetchWholesaleOrders = async () => {
+      if (!user) return
+
+      setOrdersLoading(true)
+      try {
+        const response = await fetch(`/api/wholesale/orders?userId=${user.id}`)
+        const data = await response.json()
+        if (data.success) {
+          setWholesaleOrders(data.data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch wholesale orders:', error)
+      } finally {
+        setOrdersLoading(false)
+      }
+    }
+
+    fetchWholesaleOrders()
+  }, [user])
 
   const addQuickOrderRow = () => {
     setQuickOrderItems([...quickOrderItems, { sku: "", quantity: 0, color: "", size: "" }])
@@ -145,28 +132,120 @@ export default function WholesalePage() {
     setQuickOrderItems(updated)
   }
 
-  const getWholesalePrice = (product: (typeof mockWholesaleProducts)[0], quantity: number) => {
+  const getWholesalePrice = (product: WholesaleProduct, quantity: number) => {
     const tier = product.pricing.find((p) => quantity >= p.minQty && (p.maxQty === null || quantity <= p.maxQty))
     return tier ? tier.price : product.basePrice
   }
 
-  const getDiscountPercentage = (product: (typeof mockWholesaleProducts)[0], quantity: number) => {
+  const getDiscountPercentage = (product: WholesaleProduct, quantity: number) => {
     const tier = product.pricing.find((p) => quantity >= p.minQty && (p.maxQty === null || quantity <= p.maxQty))
     return tier ? tier.discount : "0%"
   }
 
-  const submitWholesaleInquiry = () => {
-    console.log("Wholesale inquiry submitted:", wholesaleInquiry)
-    alert("Thank you for your inquiry! We'll contact you within 24 hours.")
-    setWholesaleInquiry({
-      companyName: "",
-      contactPerson: "",
-      email: "",
-      phone: "",
-      businessType: "",
-      expectedVolume: "",
-      message: "",
-    })
+  const submitWholesaleInquiry = async () => {
+    try {
+      const response = await fetch('/api/wholesale/inquiries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(wholesaleInquiry),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert(data.message)
+        setWholesaleInquiry({
+          companyName: "",
+          contactPerson: "",
+          email: "",
+          phone: "",
+          businessType: "",
+          expectedVolume: "",
+          message: "",
+        })
+      } else {
+        alert(data.message || 'Failed to submit inquiry')
+      }
+    } catch (error) {
+      console.error('Failed to submit inquiry:', error)
+      alert('Failed to submit inquiry. Please try again.')
+    }
+  }
+
+  const processQuickOrder = async () => {
+    if (!user) {
+      alert('Please login to place an order')
+      return
+    }
+
+    const validItems = quickOrderItems.filter(item =>
+      item.sku && item.quantity > 0 && item.color && item.size
+    )
+
+    if (validItems.length === 0) {
+      alert('Please add at least one valid item to your order')
+      return
+    }
+
+    try {
+      const items = validItems.map(item => {
+        const product = wholesaleProducts.find(p => p.sku === item.sku)
+        if (!product) throw new Error(`Product with SKU ${item.sku} not found`)
+
+        const unitPrice = getWholesalePrice(product, item.quantity)
+        return {
+          wholesaleProductId: product.id,
+          quantity: item.quantity,
+          unitPrice,
+          color: item.color,
+          size: item.size,
+        }
+      })
+
+      const totalAmount = items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0)
+      const discountAmount = items.reduce((sum, item) => {
+        const product = wholesaleProducts.find(p => p.id === item.wholesaleProductId)
+        if (!product) return sum
+        const retailPrice = product.basePrice
+        const discount = retailPrice - item.unitPrice
+        return sum + (discount * item.quantity)
+      }, 0)
+
+      const response = await fetch('/api/wholesale/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          items,
+          totalAmount,
+          discountAmount,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert(`Order ${data.data.orderNumber} created successfully!`)
+        setQuickOrderItems([{ sku: "", quantity: 0, color: "", size: "" }])
+        // Refresh orders
+        if (user) {
+          const ordersResponse = await fetch(`/api/wholesale/orders?userId=${user.id}`)
+          const ordersData = await ordersResponse.json()
+          if (ordersData.success) {
+            setWholesaleOrders(ordersData.data)
+          }
+        }
+      } else {
+        alert(data.message || 'Failed to create order')
+      }
+    } catch (error) {
+      console.error('Failed to create order:', error)
+      alert('Failed to create order. Please try again.')
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -199,11 +278,19 @@ export default function WholesalePage() {
               <Badge className="bg-blue-600 hover:bg-blue-700">Wholesale Portal</Badge>
             </div>
             <div className="flex items-center space-x-2">
-              <Link href="/login">
-                <Button variant="ghost" size="sm">
-                  Login
-                </Button>
-              </Link>
+              {user ? (
+                <Link href="/profile">
+                  <Button variant="ghost" size="sm">
+                    Profile
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/login">
+                  <Button variant="ghost" size="sm">
+                    Login
+                  </Button>
+                </Link>
+              )}
               <CartDrawer refreshTrigger={0} />
             </div>
           </div>
@@ -271,70 +358,84 @@ export default function WholesalePage() {
                 <CardDescription>Browse our collection with volume pricing</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {mockWholesaleProducts.map((product) => (
-                    <Card key={product.id} className="group">
-                      <div className="aspect-square relative overflow-hidden rounded-t-lg">
-                        <img
-                          src={product.image || "/placeholder.svg"}
-                          alt={product.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        />
-                        <Badge className="absolute top-2 left-2 bg-blue-600 hover:bg-blue-700">
-                          Min {product.minOrderQty} pcs
-                        </Badge>
-                      </div>
-                      <CardContent className="p-4">
-                        <div className="space-y-3">
-                          <div>
-                            <h3 className="font-semibold">{product.name}</h3>
-                            <p className="text-sm text-muted-foreground">SKU: {product.sku}</p>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span>Retail Price:</span>
-                              <span className="line-through text-muted-foreground">
-                                LKR {product.basePrice.toLocaleString()}
-                              </span>
-                            </div>
-                            {product.pricing.map((tier, index) => (
-                              <div key={index} className="flex justify-between text-sm">
-                                <span>
-                                  {tier.minQty}
-                                  {tier.maxQty ? `-${tier.maxQty}` : "+"} pcs:
-                                </span>
-                                <div className="text-right">
-                                  <span className="font-semibold text-green-600">
-                                    LKR {tier.price.toLocaleString()}
-                                  </span>
-                                  <Badge variant="outline" className="ml-2 text-xs">
-                                    {tier.discount} off
-                                  </Badge>
-                                </div>
+                {loading ? (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <Card key={index} className="group">
+                        <div className="aspect-square bg-gradient-to-br from-orange-100 to-red-100 rounded-t-lg animate-pulse"></div>
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                            <div className="h-3 bg-gray-200 rounded animate-pulse w-3/4"></div>
+                            <div className="space-y-2">
+                              <div className="flex justify-between">
+                                <div className="h-3 bg-gray-200 rounded animate-pulse w-20"></div>
+                                <div className="h-3 bg-gray-200 rounded animate-pulse w-16"></div>
                               </div>
-                            ))}
+                            </div>
                           </div>
-                          <div className="flex flex-wrap gap-1">
-                            {product.colors.slice(0, 3).map((color) => (
-                              <Badge key={color} variant="outline" className="text-xs">
-                                {color}
-                              </Badge>
-                            ))}
-                            {product.colors.length > 3 && (
-                              <Badge variant="outline" className="text-xs">
-                                +{product.colors.length - 3}
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground">{product.stock} units in stock</p>
-                          <Button size="sm" className="w-full">
-                            Add to Wholesale Cart
-                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : wholesaleProducts.length > 0 ? (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {wholesaleProducts.map((product) => (
+                      <Card key={product.id} className="group">
+                        <div className="aspect-square relative overflow-hidden rounded-t-lg">
+                          <img
+                            src={product.image || "/placeholder.svg"}
+                            alt={product.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <Badge className="absolute top-2 left-2 bg-blue-600 hover:bg-blue-700">
+                            Min {product.minOrderQty} pcs
+                          </Badge>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            <div>
+                              <h3 className="font-semibold">{product.name}</h3>
+                              <p className="text-sm text-muted-foreground">SKU: {product.sku}</p>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span>Retail Price:</span>
+                                <span className="line-through text-muted-foreground">
+                                  LKR {product.basePrice.toLocaleString()}
+                                </span>
+                              </div>
+                              {product.pricing.map((tier, index) => (
+                                <div key={index} className="flex justify-between text-sm">
+                                  <span>
+                                    {tier.minQty}
+                                    {tier.maxQty ? `-${tier.maxQty}` : "+"} pcs:
+                                  </span>
+                                  <div className="text-right">
+                                    <span className="font-semibold text-green-600">
+                                      LKR {tier.price.toLocaleString()}
+                                    </span>
+                                    <Badge variant="outline" className="ml-2 text-xs">
+                                      {tier.discount} off
+                                    </Badge>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <p className="text-xs text-muted-foreground">{product.stock} units in stock</p>
+                            <Button size="sm" className="w-full">
+                              Add to Wholesale Cart
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No wholesale products available at the moment.</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -366,7 +467,7 @@ export default function WholesalePage() {
                             <SelectValue placeholder="Select SKU" />
                           </SelectTrigger>
                           <SelectContent>
-                            {mockWholesaleProducts.map((product) => (
+                            {wholesaleProducts.map((product) => (
                               <SelectItem key={product.sku} value={product.sku}>
                                 {product.sku} - {product.name}
                               </SelectItem>
@@ -420,7 +521,7 @@ export default function WholesalePage() {
                             <>
                               LKR{" "}
                               {getWholesalePrice(
-                                mockWholesaleProducts.find((p) => p.sku === item.sku)!,
+                                wholesaleProducts.find((p) => p.sku === item.sku)!,
                                 item.quantity,
                               ).toLocaleString()}
                             </>
@@ -469,14 +570,14 @@ export default function WholesalePage() {
                     <Select
                       value={selectedProduct?.id.toString() || ""}
                       onValueChange={(value) =>
-                        setSelectedProduct(mockWholesaleProducts.find((p) => p.id.toString() === value) || null)
+                        setSelectedProduct(wholesaleProducts.find((p) => p.id.toString() === value) || null)
                       }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Choose a product" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockWholesaleProducts.map((product) => (
+                        {wholesaleProducts.map((product) => (
                           <SelectItem key={product.id} value={product.id.toString()}>
                             {product.name} ({product.sku})
                           </SelectItem>
@@ -572,34 +673,58 @@ export default function WholesalePage() {
                 <CardDescription>Track your bulk orders and download invoices</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {mockWholesaleOrders.map((order) => (
-                    <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-4">
-                        <div>
-                          <p className="font-semibold">Order #{order.id}</p>
-                          <p className="text-sm text-muted-foreground">{order.date}</p>
-                        </div>
-                        <Badge className={getStatusColor(order.status)}>
-                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                        </Badge>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold">LKR {order.total.toLocaleString()}</p>
-                        <p className="text-sm text-muted-foreground">{order.items} items</p>
-                        <p className="text-sm text-green-600">Saved: LKR {order.discount.toLocaleString()}</p>
-                        {order.invoiceNumber && (
-                          <div className="flex gap-2 mt-2">
-                            <Button variant="outline" size="sm">
-                              <Download className="h-4 w-4 mr-1" />
-                              Invoice
-                            </Button>
+                {ordersLoading ? (
+                  <div className="space-y-4">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <div key={index} className="flex items-center justify-between p-4 border rounded-lg animate-pulse">
+                        <div className="flex items-center gap-4">
+                          <div>
+                            <div className="h-4 bg-gray-200 rounded mb-2 w-24"></div>
+                            <div className="h-3 bg-gray-200 rounded w-16"></div>
                           </div>
-                        )}
+                          <div className="h-6 bg-gray-200 rounded w-16"></div>
+                        </div>
+                        <div className="text-right">
+                          <div className="h-4 bg-gray-200 rounded mb-2 w-20"></div>
+                          <div className="h-3 bg-gray-200 rounded w-16"></div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : wholesaleOrders.length > 0 ? (
+                  <div className="space-y-4">
+                    {wholesaleOrders.map((order) => (
+                      <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex items-center gap-4">
+                          <div>
+                            <p className="font-semibold">Order #{order.id}</p>
+                            <p className="text-sm text-muted-foreground">{order.date}</p>
+                          </div>
+                          <Badge className={getStatusColor(order.status)}>
+                            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                          </Badge>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">LKR {order.total.toLocaleString()}</p>
+                          <p className="text-sm text-muted-foreground">{order.items} items</p>
+                          <p className="text-sm text-green-600">Saved: LKR {order.discount.toLocaleString()}</p>
+                          {order.invoiceNumber && (
+                            <div className="flex gap-2 mt-2">
+                              <Button variant="outline" size="sm">
+                                <Download className="h-4 w-4 mr-1" />
+                                Invoice
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No wholesale orders found.</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
