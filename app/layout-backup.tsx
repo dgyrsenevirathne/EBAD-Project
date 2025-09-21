@@ -4,7 +4,6 @@ import { GeistMono } from 'geist/font/mono'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/components/auth-provider'
 import './globals.css'
-import './animations.css'
 
 export const metadata: Metadata = {
   title: 'Ceylon Threads',
