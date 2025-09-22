@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Minus, Plus, Trash2, ShoppingBag, Gift, Truck, CreditCard } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
+import { ProductRating } from "@/components/product-rating"
 import { FestivalBundleGenerator } from "@/components/festival-bundle-generator"
 
 interface CartItem {
@@ -397,55 +398,64 @@ export default function CartPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {cartItems.map((item) => (
-                  <div key={item.CartID} className="flex gap-4 p-4 border rounded-lg">
-                    <img
-                      src={item.ImageURL || "/placeholder.svg"}
-                      alt={item.ProductName}
-                      className="w-20 h-20 object-cover rounded-md"
-                    />
-                    <div className="flex-1 space-y-2">
-                      <h3 className="font-semibold">{item.ProductName}</h3>
-                      <div className="flex gap-4 text-sm text-muted-foreground">
-                        <span>Color: {item.Color}</span>
-                        <span>Size: {item.Size}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold">LKR {item.BasePrice.toLocaleString()}</span>
-                          {item.WholesalePrice && (
-                            <span className="text-sm text-muted-foreground line-through">
-                              LKR {item.WholesalePrice.toLocaleString()}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateQuantity(item.CartID, item.Quantity - 1)}
-                          >
-                            <Minus className="h-4 w-4" />
-                          </Button>
-                          <span className="w-8 text-center">{item.Quantity}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateQuantity(item.CartID, item.Quantity + 1)}
-                            disabled={item.Quantity >= item.Stock}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => removeItem(item.CartID)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      {stockWarningItems.has(item.CartID) && (
-                        <p className="text-xs text-orange-600">Maximum available quantity reached</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+  <div key={item.CartID} className="border rounded-lg p-4 space-y-4">
+    <div className="flex gap-4">
+      <img
+        src={item.ImageURL || "/placeholder.svg"}
+        alt={item.ProductName}
+        className="w-20 h-20 object-cover rounded-md"
+      />
+      <div className="flex-1 space-y-2">
+        <h3 className="font-semibold">{item.ProductName}</h3>
+        <div className="flex gap-4 text-sm text-muted-foreground">
+          <span>Color: {item.Color}</span>
+          <span>Size: {item.Size}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-bold">LKR {item.BasePrice.toLocaleString()}</span>
+            {item.WholesalePrice && (
+              <span className="text-sm text-muted-foreground line-through">
+                LKR {item.WholesalePrice.toLocaleString()}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateQuantity(item.CartID, item.Quantity - 1)}
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+            <span className="w-8 text-center">{item.Quantity}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateQuantity(item.CartID, item.Quantity + 1)}
+              disabled={item.Quantity >= item.Stock}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => removeItem(item.CartID)}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        {stockWarningItems.has(item.CartID) && (
+          <p className="text-xs text-orange-600">Maximum available quantity reached</p>
+        )}
+      </div>
+    </div>
+
+    {/* Product Rating Component */}
+    <ProductRating
+      productId={item.ProductID}
+      productName={item.ProductName}
+    />
+  </div>
+))}
+
               </CardContent>
             </Card>
 
