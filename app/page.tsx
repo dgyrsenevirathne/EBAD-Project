@@ -77,6 +77,7 @@ export default function HomePage() {
             <nav className="hidden md:flex items-center space-x-8">
               {[
                 { href: "/products", label: "Shop" },
+                { href: "/virtual-try-on", label: "Virtual Try-On", icon: "✨" },
                 { href: "/wishlist", label: "Wishlist", auth: true },
                 { href: "/wholesale", label: "Wholesale" },
                 { href: "/rewards", label: "Rewards" },
@@ -216,11 +217,18 @@ export default function HomePage() {
           <div className="grid md:grid-cols-3 gap-8">
             {[
               {
+                icon: Sparkles,
+                title: "Virtual Try-On",
+                description: "Try on clothes virtually before you buy with AI technology",
+                gradient: "from-purple-500 to-pink-600",
+                bg: "from-purple-50 to-pink-50"
+              },
+              {
                 icon: Gift,
                 title: "Loyalty Rewards",
                 description: "Earn points with every purchase. LKR 100 = 1 point",
-                gradient: "from-purple-500 to-pink-600",
-                bg: "from-purple-50 to-pink-50"
+                gradient: "from-orange-500 to-red-600",
+                bg: "from-orange-50 to-red-50"
               },
               {
                 icon: Users,
@@ -409,6 +417,7 @@ export default function HomePage() {
               <ul className="space-y-3">
                 {[
                   { href: "/products", label: "Shop Collection" },
+                  { href: "/virtual-try-on", label: "Virtual Try-On" },
                   { href: "/wholesale", label: "Wholesale" },
                   { href: "/rewards", label: "Rewards Program" },
                   { href: "/about", label: "About Us" }
