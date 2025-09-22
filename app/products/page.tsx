@@ -187,11 +187,19 @@ export default function ProductsPage() {
                   </Button>
                 </Link>
               )}
-              <Link href="/login">
-                <Button variant="ghost" size="sm">
-                  Login
-                </Button>
-              </Link>
+              {user ? (
+                <Link href="/profile">
+                  <Button variant="ghost" size="sm">
+                    Profile
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/login">
+                  <Button variant="ghost" size="sm">
+                    Login
+                  </Button>
+                </Link>
+              )}
               <CartDrawer refreshTrigger={cartRefreshTrigger} />
             </div>
           </div>

@@ -1,11 +1,16 @@
+"use client"
+
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Heart, Award, Users, Leaf, Star, MapPin, Phone } from "lucide-react"
 import { CartDrawer } from "@/components/cart-drawer"
+import { useAuth } from "@/components/auth-provider"
 
 export default function AboutPage() {
+  const { user } = useAuth()
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -33,14 +38,24 @@ export default function AboutPage() {
               </Link>
             </nav>
             <div className="flex items-center space-x-2">
-              <Link href="/login">
-                <Button variant="ghost" size="sm">
-                  Login
-                </Button>
-              </Link>
-              <Link href="/register">
-                <Button size="sm">Sign Up</Button>
-              </Link>
+              {user ? (
+                <Link href="/profile">
+                  <Button variant="ghost" size="sm">
+                    Profile
+                  </Button>
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login">
+                    <Button variant="ghost" size="sm">
+                      Login
+                    </Button>
+                  </Link>
+                  <Link href="/register">
+                    <Button size="sm">Sign Up</Button>
+                  </Link>
+                </>
+              )}
               <CartDrawer refreshTrigger={0} />
             </div>
           </div>

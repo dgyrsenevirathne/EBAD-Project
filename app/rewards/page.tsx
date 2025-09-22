@@ -220,11 +220,19 @@ export default function RewardsPage() {
               <h1 className="text-2xl font-bold text-primary">Ceylon Threads</h1>
             </div>
             <div className="flex items-center space-x-2">
-              <Link href="/login">
-                <Button variant="ghost" size="sm">
-                  Login
-                </Button>
-              </Link>
+              {user ? (
+                <Link href="/profile">
+                  <Button variant="ghost" size="sm">
+                    Profile
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/login">
+                  <Button variant="ghost" size="sm">
+                    Login
+                  </Button>
+                </Link>
+              )}
               <CartDrawer refreshTrigger={0} />
             </div>
           </div>
