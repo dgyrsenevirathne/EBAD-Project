@@ -9,6 +9,7 @@ import { Star, Gift, Users, Phone, MapPin, ShoppingBag, Heart, Sparkles, ArrowRi
 import { CartDrawer } from "@/components/cart-drawer"
 import { useAuth } from "@/components/auth-provider"
 import { LanguageSelector } from "@/components/language-selector"
+import { useTranslation } from "@/components/translation-provider"
 
 interface FeaturedProduct {
   ProductID: number
@@ -19,6 +20,7 @@ interface FeaturedProduct {
 
 export default function HomePage() {
   const { user } = useAuth()
+  const { t } = useTranslation()
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [isScrolled, setIsScrolled] = useState(false)
@@ -80,12 +82,12 @@ export default function HomePage() {
 
             <nav className="hidden md:flex items-center space-x-8">
               {[
-                { href: "/products", label: "Shop" },
-                { href: "/virtual-try-on", label: "Virtual Try-On", icon: "✨" },
-                { href: "/wishlist", label: "Wishlist", auth: true },
-                { href: "/wholesale", label: "Wholesale" },
-                { href: "/rewards", label: "Rewards" },
-                { href: "/about", label: "About" }
+                { href: "/products", label: t("nav.shop") },
+                { href: "/virtual-try-on", label: t("nav.virtualTryOn"), icon: "✨" },
+                { href: "/wishlist", label: t("nav.wishlist"), auth: true },
+                { href: "/wholesale", label: t("nav.wholesale") },
+                { href: "/rewards", label: t("nav.rewards") },
+                { href: "/about", label: t("nav.about") }
               ].map((item) => (
                 (!item.auth || user) && (
                   <Link
@@ -104,19 +106,19 @@ export default function HomePage() {
               {user ? (
                 <Link href="/profile">
                   <Button variant="ghost" size="sm" className="hover:bg-orange-50 hover:text-orange-600 transition-colors">
-                    Profile
+                    {t("nav.profile")}
                   </Button>
                 </Link>
               ) : (
                 <>
                   <Link href="/login">
                     <Button variant="ghost" size="sm" className="hover:bg-orange-50 hover:text-orange-600 transition-colors">
-                      Login
+                      {t("nav.login")}
                     </Button>
                   </Link>
                   <Link href="/register">
                     <Button size="sm" className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 shadow-lg hover:shadow-xl transition-all duration-300">
-                      Sign Up
+                      {t("nav.signUp")}
                     </Button>
                   </Link>
                 </>
@@ -164,14 +166,14 @@ export default function HomePage() {
               <Link href="/products">
                 <Button size="lg" className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 px-8 py-4 text-lg font-semibold">
                   <ShoppingBag className="mr-2 h-5 w-5" />
-                  Shop Collection
+                  {t("hero.shopCollection")}
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
               <Link href="/wholesale">
                 <Button variant="outline" size="lg" className="bg-white/70 backdrop-blur-sm border-2 border-orange-200 hover:border-orange-300 hover:bg-orange-50 transition-all duration-300 px-8 py-4 text-lg font-semibold">
                   <Users className="mr-2 h-5 w-5" />
-                  Wholesale Portal
+                  {t("hero.wholesalePortal")}
                 </Button>
               </Link>
             </div>
@@ -356,7 +358,7 @@ export default function HomePage() {
                       </div>
 
                       <Button className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 transition-all duration-300 group-hover:shadow-lg">
-                        View Details
+                        {t("common.viewDetails")}
                         <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
                       </Button>
                     </CardContent>
@@ -370,7 +372,7 @@ export default function HomePage() {
                   <p className="text-slate-600 text-lg">No featured products available at the moment.</p>
                   <Link href="/products">
                     <Button className="mt-6 bg-gradient-to-r from-orange-500 to-red-600">
-                      Browse All Products
+                      {t("common.browseAllProducts")}
                     </Button>
                   </Link>
                 </div>
@@ -407,11 +409,11 @@ export default function HomePage() {
               <div className="flex space-x-4">
                 <Button variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
                   <Phone className="mr-2 h-4 w-4" />
-                  Contact Us
+                  {t("footer.contactUs")}
                 </Button>
                 <Button variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
                   <MapPin className="mr-2 h-4 w-4" />
-                  Find Us
+                  {t("footer.findUs")}
                 </Button>
               </div>
             </div>

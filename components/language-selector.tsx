@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Globe } from "lucide-react"
+import { useTranslation } from "@/components/translation-provider"
 
 interface Language {
   code: string
@@ -28,28 +29,15 @@ const languages: Language[] = [
 ]
 
 export function LanguageSelector() {
-  const [currentLanguage, setCurrentLanguage] = useState("en")
   const [isOpen, setIsOpen] = useState(false)
-
-  useEffect(() => {
-    // Get saved language from localStorage or default to English
-    const savedLanguage = localStorage.getItem("language") || "en"
-    setCurrentLanguage(savedLanguage)
-    document.documentElement.lang = savedLanguage
-  }, [])
+  const { language, setLanguage, t } = useTranslation()
 
   const handleLanguageChange = (languageCode: string) => {
-    setCurrentLanguage(languageCode)
-    localStorage.setItem("language", languageCode)
-    document.documentElement.lang = languageCode
+    setLanguage(languageCode)
     setIsOpen(false)
-
-    // Here you would typically integrate with a translation system
-    // For now, we'll just change the document language attribute
-    console.log(`Language changed to: ${languageCode}`)
   }
 
-  const currentLang = languages.find(lang => lang.code === currentLanguage) || languages[0]
+  const currentLang = languages.find(lang => lang.code === language) || languages[0]
 
   return (
     <div className="fixed top-20 left-4 z-50">
@@ -75,20 +63,20 @@ export function LanguageSelector() {
 
             {/* Dropdown */}
             <div className="absolute top-full mt-2 left-0 z-50 bg-white/95 backdrop-blur-sm rounded-lg shadow-xl border border-white/20 min-w-[200px] py-2">
-              {languages.map((language) => (
+              {languages.map((lang) => (
                 <button
-                  key={language.code}
-                  onClick={() => handleLanguageChange(language.code)}
+                  key={lang.code}
+                  onClick={() => handleLanguageChange(lang.code)}
                   className={`w-full px-4 py-3 text-left hover:bg-orange-50 transition-colors duration-200 flex items-center space-x-3 ${
-                    currentLanguage === language.code ? 'bg-orange-100 text-orange-700' : 'text-slate-700'
+                    lang.code === language ? 'bg-orange-100 text-orange-700' : 'text-slate-700'
                   }`}
                 >
-                  <span className="text-lg">{language.flag}</span>
+                  <span className="text-lg">{lang.flag}</span>
                   <div className="flex-1">
-                    <div className="font-medium">{language.nativeName}</div>
-                    <div className="text-xs text-slate-500">{language.name}</div>
+                    <div className="font-medium">{lang.nativeName}</div>
+                    <div className="text-xs text-slate-500">{lang.name}</div>
                   </div>
-                  {currentLanguage === language.code && (
+                  {lang.code === language && (
                     <Badge variant="secondary" className="bg-orange-200 text-orange-700 text-xs">
                       Active
                     </Badge>

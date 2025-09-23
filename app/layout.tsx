@@ -3,6 +3,7 @@ import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/components/auth-provider'
+import { TranslationProvider } from '@/components/translation-provider'
 import './globals.css'
 import './animations.css'
 
@@ -20,9 +21,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <TranslationProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </TranslationProvider>
         <Analytics />
       </body>
     </html>
