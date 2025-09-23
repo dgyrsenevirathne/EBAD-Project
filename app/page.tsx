@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Star, Gift, Users, Phone, MapPin, ShoppingBag, Heart, Sparkles, ArrowRight, Truck, Shield, Award } from "lucide-react"
 import { CartDrawer } from "@/components/cart-drawer"
 import { useAuth } from "@/components/auth-provider"
+import { LanguageSelector } from "@/components/language-selector"
 
 interface FeaturedProduct {
   ProductID: number
@@ -49,6 +50,9 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-orange-50/30">
+      {/* Language Selector */}
+      <LanguageSelector />
+
       {/* Modern Floating Header */}
       <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
         isScrolled
