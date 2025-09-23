@@ -27,6 +27,11 @@ interface Product {
   IsActive: boolean
 }
 
+interface ProductRating {
+  averageRating: number
+  totalRatings: number
+}
+
 const categories = [
   { id: 0, name: "All" },
   { id: 1, name: "Men" },
@@ -49,6 +54,7 @@ export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [showFilters, setShowFilters] = useState(false)
   const [cartRefreshTrigger, setCartRefreshTrigger] = useState(0)
+  const [productRatings, setProductRatings] = useState<Record<number, ProductRating>>({})
 
   const fetchProducts = async () => {
     try {
@@ -163,6 +169,64 @@ export default function ProductsPage() {
       alert('Failed to add item to wishlist')
     }
   }
+
+  const fetchProductRatings = async (productIds: number[]) => {
+    try {
+      const ratingsPromises = productIds.map(async (productId) => {
+        const response = await fetch(`/api/products/ratings?productId=${productId}`)
+        const data = await response.json()
+        return {
+          productId,
+          rating: data.success ? data.data : { averageRating: 0, totalRatings: 0 }
+        }
+      })
+
+      const ratingsResults = await Promise.all(ratingsPromises)
+      const ratingsMap: Record<number, ProductRating> = {}
+
+      ratingsResults.forEach(({ productId, rating }) => {
+        ratingsMap[productId] = {
+          averageRating: rating.averageRating || 0,
+          totalRatings: rating.totalRatings || 0
+        }
+      })
+
+      setProductRatings(ratingsMap)
+    } catch (error) {
+      console.error('Failed to fetch product ratings:', error)
+    }
+  }
+
+  const renderStars = (rating: number, size: 'sm' | 'md' = 'sm') => {
+    const starSize = size === 'sm' ? 'h-3 w-3' : 'h-4 w-4'
+    const fullStars = Math.floor(rating)
+    const hasHalfStar = rating % 1 >= 0.5
+
+    return (
+      <div className="flex items-center gap-0.5">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star
+            key={star}
+            className={`${starSize} ${
+              star <= fullStars
+                ? 'fill-yellow-400 text-yellow-400'
+                : star === fullStars + 1 && hasHalfStar
+                ? 'fill-yellow-200 text-yellow-400'
+                : 'text-gray-300'
+            }`}
+          />
+        ))}
+      </div>
+    )
+  }
+
+  // Fetch ratings when products change
+  useEffect(() => {
+    if (products.length > 0) {
+      const productIds = products.map(p => p.ProductID)
+      fetchProductRatings(productIds)
+    }
+  }, [products])
 
   return (
     <div className="min-h-screen bg-background">
@@ -385,6 +449,18 @@ export default function ProductsPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">{product.CategoryName}</span>
                       </div>
+
+                      {/* Rating Display */}
+                      {productRatings[product.ProductID] && (
+                        <div className="flex items-center gap-2">
+                          {renderStars(productRatings[product.ProductID].averageRating, 'sm')}
+                          <span className="text-sm text-muted-foreground">
+                            {productRatings[product.ProductID].averageRating.toFixed(1)}
+                            ({productRatings[product.ProductID].totalRatings} {productRatings[product.ProductID].totalRatings === 1 ? 'review' : 'reviews'})
+                          </span>
+                        </div>
+                      )}
+
                       <div className="flex items-center gap-2">
                         <span className="text-lg font-bold">LKR {product.BasePrice.toLocaleString()}</span>
                         {product.WholesalePrice && product.WholesalePrice < product.BasePrice && (
