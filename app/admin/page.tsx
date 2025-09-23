@@ -77,7 +77,8 @@ export default function AdminDashboard() {
     stock: "",
     isFeatured: false,
     imageUrl: "",
-    imageFile: null as File | null
+    imageFile: null as File | null,
+    variants: [{ size: "", color: "", stock: "" }] // Array of variants
   })
 
   // Category form state
@@ -136,6 +137,11 @@ export default function AdminDashboard() {
     try {
       let response: Response;
 
+      // Filter out empty variants (variants with empty size, color, or stock)
+      const validVariants = productForm.variants.filter(variant =>
+        variant.size && variant.color && variant.stock
+      )
+
       if (productForm.imageFile) {
         // Use FormData for file upload
         const formData = new FormData()
@@ -148,6 +154,7 @@ export default function AdminDashboard() {
         formData.append('stock', productForm.stock)
         formData.append('isFeatured', productForm.isFeatured.toString())
         formData.append('imageFile', productForm.imageFile)
+        formData.append('variants', JSON.stringify(validVariants))
 
         response = await fetch('/api/products', {
           method: 'POST',
@@ -169,7 +176,8 @@ export default function AdminDashboard() {
             festival: productForm.festival || null,
             stock: parseInt(productForm.stock) || 0,
             isFeatured: productForm.isFeatured,
-            imageUrl: productForm.imageUrl || null
+            imageUrl: productForm.imageUrl || null,
+            variants: validVariants
           }),
         })
       }
@@ -192,7 +200,8 @@ export default function AdminDashboard() {
           stock: "",
           isFeatured: false,
           imageUrl: "",
-          imageFile: null
+          imageFile: null,
+          variants: [{ size: "", color: "", stock: "" }]
         })
         // Refresh products list (you might want to add state for products)
       } else {
@@ -422,14 +431,15 @@ export default function AdminDashboard() {
                     Add Product
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[600px]">
-                  <DialogHeader>
+                <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
+                  <DialogHeader className="flex-shrink-0">
                     <DialogTitle>Add New Product</DialogTitle>
                     <DialogDescription>
                       Add a new product to your inventory. Fill in the details below.
                     </DialogDescription>
                   </DialogHeader>
-                  <form onSubmit={handleAddProduct} className="space-y-4">
+                  <div className="flex-1 overflow-y-auto pr-1">
+                    <form onSubmit={handleAddProduct} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="productName">Product Name *</Label>
@@ -545,6 +555,104 @@ export default function AdminDashboard() {
                         <p className="text-sm text-gray-600">Selected: {productForm.imageFile.name}</p>
                       )}
                     </div>
+                    {/* Variants Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-base font-medium">Product Variants</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setProductForm({
+                              ...productForm,
+                              variants: [...productForm.variants, { size: "", color: "", stock: "" }]
+                            })
+                          }}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Variant
+                        </Button>
+                      </div>
+
+                      {productForm.variants.map((variant, index) => (
+                        <div key={index} className="p-4 border rounded-lg space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium">Variant {index + 1}</Label>
+                            {productForm.variants.length > 1 && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const newVariants = productForm.variants.filter((_, i) => i !== index)
+                                  setProductForm({...productForm, variants: newVariants})
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="space-y-2">
+                              <Label htmlFor={`size-${index}`}>Size</Label>
+                              <Select
+                                value={variant.size}
+                                onValueChange={(value) => {
+                                  const newVariants = [...productForm.variants]
+                                  newVariants[index].size = value
+                                  setProductForm({...productForm, variants: newVariants})
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select size" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="XS">XS</SelectItem>
+                                  <SelectItem value="S">S</SelectItem>
+                                  <SelectItem value="M">M</SelectItem>
+                                  <SelectItem value="L">L</SelectItem>
+                                  <SelectItem value="XL">XL</SelectItem>
+                                  <SelectItem value="XXL">XXL</SelectItem>
+                                  <SelectItem value="Free Size">Free Size</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor={`color-${index}`}>Color</Label>
+                              <Input
+                                id={`color-${index}`}
+                                value={variant.color}
+                                onChange={(e) => {
+                                  const newVariants = [...productForm.variants]
+                                  newVariants[index].color = e.target.value
+                                  setProductForm({...productForm, variants: newVariants})
+                                }}
+                                placeholder="e.g., Red, Blue, White"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor={`stock-${index}`}>Stock</Label>
+                              <Input
+                                id={`stock-${index}`}
+                                type="number"
+                                value={variant.stock}
+                                onChange={(e) => {
+                                  const newVariants = [...productForm.variants]
+                                  newVariants[index].stock = e.target.value
+                                  setProductForm({...productForm, variants: newVariants})
+                                }}
+                                placeholder="0"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
                     <div className="flex items-center space-x-2">
                       <Switch
                         id="isFeatured"
@@ -553,7 +661,7 @@ export default function AdminDashboard() {
                       />
                       <Label htmlFor="isFeatured">Featured Product</Label>
                     </div>
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-2 flex-shrink-0">
                       <Button type="button" variant="outline" onClick={() => setIsAddProductOpen(false)}>
                         Cancel
                       </Button>
@@ -561,7 +669,8 @@ export default function AdminDashboard() {
                         {isLoading ? "Adding..." : "Add Product"}
                       </Button>
                     </div>
-                  </form>
+                    </form>
+                  </div>
                 </DialogContent>
               </Dialog>
             </div>

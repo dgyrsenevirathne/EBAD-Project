@@ -134,6 +134,7 @@ export async function POST(request: NextRequest) {
     let isFeatured: boolean;
     let imageUrl: string | null = null;
     let imageFile: File | null = null;
+    let variants: any[] = [];
 
     if (contentType.includes('multipart/form-data')) {
       // Handle file upload
@@ -148,6 +149,16 @@ export async function POST(request: NextRequest) {
       isFeatured = formData.get('isFeatured') === 'true';
       imageUrl = formData.get('imageUrl') as string || null;
       imageFile = formData.get('imageFile') as File || null;
+
+      // Parse variants from FormData
+      const variantsData = formData.get('variants') as string;
+      if (variantsData) {
+        try {
+          variants = JSON.parse(variantsData);
+        } catch (error) {
+          console.error('Error parsing variants:', error);
+        }
+      }
     } else {
       // Handle JSON request
       const body = await request.json();
@@ -160,6 +171,7 @@ export async function POST(request: NextRequest) {
       stock = body.stock || 0;
       isFeatured = body.isFeatured || false;
       imageUrl = body.imageUrl || null;
+      variants = body.variants || [];
     }
 
     // Validation
@@ -193,17 +205,35 @@ export async function POST(request: NextRequest) {
 
     const productId = result.recordset[0].ProductID;
 
-    // Insert default variant with stock
-    const variantStock = stock || 0;
-    const variantSku = sku + '-DEFAULT';
-    await pool.request()
-      .input('productId', sql.Int, productId)
-      .input('stock', sql.Int, variantStock)
-      .input('variantSku', sql.NVarChar(100), variantSku)
-      .query(`
-        INSERT INTO ProductVariants (ProductID, Stock, VariantSKU, IsActive)
-        VALUES (@productId, @stock, @variantSku, 1)
-      `);
+    // Handle variants
+    if (variants && variants.length > 0) {
+      // Insert provided variants
+      for (const variant of variants) {
+        const variantSku = `${sku}-${variant.size || 'DEFAULT'}-${variant.color || 'DEFAULT'}`.replace(/[^A-Z0-9-]/gi, '');
+        await pool.request()
+          .input('productId', sql.Int, productId)
+          .input('size', sql.NVarChar(50), variant.size || null)
+          .input('color', sql.NVarChar(50), variant.color || null)
+          .input('stock', sql.Int, parseInt(variant.stock) || 0)
+          .input('variantSku', sql.NVarChar(100), variantSku)
+          .query(`
+            INSERT INTO ProductVariants (ProductID, Size, Color, Stock, VariantSKU, IsActive)
+            VALUES (@productId, @size, @color, @stock, @variantSku, 1)
+          `);
+      }
+    } else {
+      // Insert default variant with stock (backward compatibility)
+      const variantStock = stock || 0;
+      const variantSku = sku + '-DEFAULT';
+      await pool.request()
+        .input('productId', sql.Int, productId)
+        .input('stock', sql.Int, variantStock)
+        .input('variantSku', sql.NVarChar(100), variantSku)
+        .query(`
+          INSERT INTO ProductVariants (ProductID, Stock, VariantSKU, IsActive)
+          VALUES (@productId, @stock, @variantSku, 1)
+        `);
+    }
 
     // Handle image
     if (imageFile) {
