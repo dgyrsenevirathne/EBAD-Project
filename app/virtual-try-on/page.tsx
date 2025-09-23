@@ -27,7 +27,14 @@ import {
   Ruler,
   Zap,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  BookOpen,
+  HeartHandshake,
+  Leaf,
+  Crown,
+  Star,
+  MapPin,
+  type LucideIcon
 } from "lucide-react"
 import { CartDrawer } from "@/components/cart-drawer"
 import { useAuth } from "@/components/auth-provider"
@@ -63,6 +70,69 @@ const skinTones = [
   { id: 'dark', name: 'Dark', color: '#654321' }
 ]
 
+// Cultural storytelling data
+interface CulturalStory {
+  title: string
+  description: string
+  details: string[]
+  icon: LucideIcon
+  color: string
+}
+
+const culturalStories: Record<string, CulturalStory> = {
+  'Traditional Clothing': {
+    title: "Sri Lankan Traditional Attire",
+    description: "Discover the rich heritage of Sri Lankan traditional clothing, passed down through generations.",
+    details: [
+      "The Kandyan saree, worn by women in the hill country, features intricate handwoven patterns",
+      "The sarong, a versatile garment worn by men, comes in various regional styles",
+      "Traditional fabrics like handloom cotton and silk carry stories of ancient craftsmanship"
+    ],
+    icon: Crown,
+    color: "from-amber-500 to-orange-600"
+  },
+  'Cultural Significance': {
+    title: "Cultural Significance",
+    description: "Each garment tells a story of Sri Lanka's diverse cultural heritage.",
+    details: [
+      "Traditional clothing reflects social status, regional identity, and cultural values",
+      "Colors and patterns often have symbolic meanings in Sri Lankan culture",
+      "Many garments are worn during festivals, weddings, and important life events"
+    ],
+    icon: HeartHandshake,
+    color: "from-red-500 to-pink-600"
+  },
+  'Sustainable Heritage': {
+    title: "Sustainable Heritage",
+    description: "Learn about eco-friendly traditional practices that respect our environment.",
+    details: [
+      "Handloom weaving uses natural dyes and sustainable materials",
+      "Traditional techniques support local artisans and preserve cultural knowledge",
+      "Many fabrics are made from organic cotton, silk, and other natural fibers"
+    ],
+    icon: Leaf,
+    color: "from-green-500 to-emerald-600"
+  }
+}
+
+const culturalTips = [
+  {
+    title: "Wearing Traditional Attire",
+    tip: "When wearing a saree, the 'pallu' (decorative end) is traditionally worn over the left shoulder, symbolizing grace and tradition.",
+    icon: Star
+  },
+  {
+    title: "Cultural Etiquette",
+    tip: "In Sri Lankan culture, traditional clothing is often worn during religious ceremonies, weddings, and cultural festivals.",
+    icon: HeartHandshake
+  },
+  {
+    title: "Modern Fusion",
+    tip: "Contemporary Sri Lankan fashion blends traditional elements with modern designs, creating unique fusion wear.",
+    icon: Sparkles
+  }
+]
+
 export default function VirtualTryOnPage() {
   const { user, token } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
@@ -70,6 +140,7 @@ export default function VirtualTryOnPage() {
   const [tryOnSessions, setTryOnSessions] = useState<TryOnSession[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [selectedStory, setSelectedStory] = useState<keyof typeof culturalStories>('Traditional Clothing')
 
   // User customization options
   const [bodyType, setBodyType] = useState('regular')
@@ -370,7 +441,102 @@ export default function VirtualTryOnPage() {
       </header>
 
       <div className="container mx-auto px-4 py-6">
-        {/* Hero Section */}
+        {/* Cultural Heritage Hero Section */}
+        <div className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-50 via-orange-50 to-red-50 border border-amber-200/50">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(251,146,60,0.1),transparent_50%)]"></div>
+          <div className="relative p-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl">
+                <MapPin className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-amber-700 to-orange-700 bg-clip-text text-transparent">
+                  Experience Sri Lankan Heritage
+                </h2>
+                <p className="text-amber-700">Discover the stories behind our traditional craftsmanship</p>
+              </div>
+            </div>
+
+            <p className="text-slate-700 mb-6 max-w-3xl">
+              Welcome to our Virtual Try-On Studio, where modern technology meets ancient Sri Lankan traditions.
+              Each garment in our collection carries centuries of cultural heritage, handcrafted by skilled artisans
+              who preserve techniques passed down through generations.
+            </p>
+
+            <div className="grid md:grid-cols-3 gap-4">
+              {Object.entries(culturalStories).map(([key, story]) => {
+                const IconComponent = story.icon
+                return (
+                  <Card
+                    key={key}
+                    className={`cursor-pointer transition-all duration-300 hover:shadow-lg border-0 bg-white/70 backdrop-blur-sm ${
+                      selectedStory === key ? 'ring-2 ring-amber-400' : ''
+                    }`}
+                    onClick={() => setSelectedStory(key as keyof typeof culturalStories)}
+                  >
+                    <CardContent className="p-4">
+                      <div className={`inline-flex p-2 rounded-lg bg-gradient-to-r ${story.color} w-fit mb-3`}>
+                        <IconComponent className="h-5 w-5 text-white" />
+                      </div>
+                      <h4 className="font-semibold text-sm mb-2">{story.title}</h4>
+                      <p className="text-xs text-slate-600">{story.description}</p>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Cultural Story Details */}
+        <Card className="mb-8 border-amber-200/50 bg-gradient-to-r from-amber-50/50 to-orange-50/50">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg bg-gradient-to-r ${culturalStories[selectedStory].color}`}>
+                {(() => {
+                  const IconComponent = culturalStories[selectedStory].icon
+                  return <IconComponent className="h-5 w-5 text-white" />
+                })()}
+              </div>
+              <div>
+                <CardTitle className="text-xl">{culturalStories[selectedStory].title}</CardTitle>
+                <CardDescription>{culturalStories[selectedStory].description}</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-3">
+              {culturalStories[selectedStory].details.map((detail, index) => (
+                <li key={index} className="flex items-start gap-3">
+                  <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0"></div>
+                  <span className="text-slate-700">{detail}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+
+        {/* Cultural Tips */}
+        <div className="grid md:grid-cols-3 gap-4 mb-8">
+          {culturalTips.map((tip, index) => {
+            const IconComponent = tip.icon
+            return (
+              <Card key={index} className="bg-white/70 backdrop-blur-sm border-amber-200/30">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-gradient-to-r from-amber-400 to-orange-500 rounded-lg">
+                      <IconComponent className="h-4 w-4 text-white" />
+                    </div>
+                    <h4 className="font-semibold text-sm">{tip.title}</h4>
+                  </div>
+                  <p className="text-xs text-slate-600">{tip.tip}</p>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+
+        {/* Main Virtual Try-On Interface */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
             <Eye className="h-8 w-8 text-purple-600" />
@@ -416,7 +582,7 @@ export default function VirtualTryOnPage() {
                   </Select>
 
                   {selectedProduct && (
-                    <div className="p-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg border">
+                    <div className="p-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg border border-amber-200/50">
                       <div className="flex items-center gap-3">
                         <img
                           src={selectedProduct.PrimaryImage || "/placeholder.svg"}
@@ -501,6 +667,38 @@ export default function VirtualTryOnPage() {
                     checked={autoAdjustSize}
                     onCheckedChange={setAutoAdjustSize}
                   />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Cultural Learning Section */}
+            <Card className="bg-gradient-to-r from-amber-50/50 to-orange-50/50 border-amber-200/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <BookOpen className="h-5 w-5 text-amber-600" />
+                  Cultural Learning
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="p-3 bg-white/70 rounded-lg">
+                    <h5 className="font-medium text-sm mb-1">Traditional Craftsmanship</h5>
+                    <p className="text-xs text-slate-600">
+                      Each garment is handcrafted using techniques passed down through generations of Sri Lankan artisans.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white/70 rounded-lg">
+                    <h5 className="font-medium text-sm mb-1">Sustainable Practices</h5>
+                    <p className="text-xs text-slate-600">
+                      Our traditional methods use natural dyes and eco-friendly materials that respect the environment.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white/70 rounded-lg">
+                    <h5 className="font-medium text-sm mb-1">Cultural Significance</h5>
+                    <p className="text-xs text-slate-600">
+                      Traditional clothing reflects social values, regional identity, and cultural heritage.
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
