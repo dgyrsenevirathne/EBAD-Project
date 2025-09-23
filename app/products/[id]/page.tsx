@@ -19,6 +19,8 @@ interface Product {
   ProductID: number
   ProductName: string
   BasePrice: number
+  WholesalePrice: number | null
+  Festival: string | null
   CategoryName: string
   Description: string
   IsFeatured: boolean
@@ -267,7 +269,19 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
               </div>
               <div className="flex items-center gap-4 mb-6">
                 <span className="text-3xl font-bold">LKR {product.BasePrice.toLocaleString()}</span>
+                {product.WholesalePrice && product.WholesalePrice < product.BasePrice && (
+                  <span className="text-lg text-muted-foreground line-through">
+                    LKR {product.WholesalePrice.toLocaleString()}
+                  </span>
+                )}
               </div>
+              {product.Festival && (
+                <div className="mb-4">
+                  <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                    🎉 {product.Festival} Collection
+                  </Badge>
+                </div>
+              )}
             </div>
 
             <div className="space-y-4">

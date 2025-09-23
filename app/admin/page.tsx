@@ -72,6 +72,8 @@ export default function AdminDashboard() {
     description: "",
     categoryId: "",
     basePrice: "",
+    wholesalePrice: "",
+    festival: "",
     stock: "",
     isFeatured: false,
     imageUrl: "",
@@ -141,6 +143,8 @@ export default function AdminDashboard() {
         formData.append('description', productForm.description)
         formData.append('categoryId', productForm.categoryId)
         formData.append('basePrice', productForm.basePrice)
+        formData.append('wholesalePrice', productForm.wholesalePrice)
+        formData.append('festival', productForm.festival)
         formData.append('stock', productForm.stock)
         formData.append('isFeatured', productForm.isFeatured.toString())
         formData.append('imageFile', productForm.imageFile)
@@ -161,6 +165,8 @@ export default function AdminDashboard() {
             description: productForm.description,
             categoryId: parseInt(productForm.categoryId),
             basePrice: parseFloat(productForm.basePrice),
+            wholesalePrice: productForm.wholesalePrice ? parseFloat(productForm.wholesalePrice) : null,
+            festival: productForm.festival || null,
             stock: parseInt(productForm.stock) || 0,
             isFeatured: productForm.isFeatured,
             imageUrl: productForm.imageUrl || null
@@ -181,6 +187,8 @@ export default function AdminDashboard() {
           description: "",
           categoryId: "",
           basePrice: "",
+          wholesalePrice: "",
+          festival: "",
           stock: "",
           isFeatured: false,
           imageUrl: "",
@@ -473,6 +481,19 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div className="space-y-2">
+                        <Label htmlFor="wholesalePrice">Wholesale Price (LKR)</Label>
+                        <Input
+                          id="wholesalePrice"
+                          type="number"
+                          step="0.01"
+                          value={productForm.wholesalePrice}
+                          onChange={(e) => setProductForm({...productForm, wholesalePrice: e.target.value})}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
                         <Label htmlFor="stock">Stock Quantity</Label>
                         <Input
                           id="stock"
@@ -481,6 +502,23 @@ export default function AdminDashboard() {
                           onChange={(e) => setProductForm({...productForm, stock: e.target.value})}
                           placeholder="0"
                         />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="festival">Festival</Label>
+                        <Select value={productForm.festival} onValueChange={(value) => setProductForm({...productForm, festival: value})}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select festival" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            <SelectItem value="Avurudu">Avurudu (New Year)</SelectItem>
+                            <SelectItem value="Vesak">Vesak</SelectItem>
+                            <SelectItem value="Christmas">Christmas</SelectItem>
+                            <SelectItem value="Deepavali">Deepavali</SelectItem>
+                            <SelectItem value="Eid">Eid</SelectItem>
+                            <SelectItem value="Poson">Poson</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                     <div className="space-y-2">

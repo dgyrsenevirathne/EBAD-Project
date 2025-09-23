@@ -128,6 +128,8 @@ export async function POST(request: NextRequest) {
     let description: string;
     let categoryId: number;
     let basePrice: number;
+    let wholesalePrice: number | null = null;
+    let festival: string | null = null;
     let stock: number;
     let isFeatured: boolean;
     let imageUrl: string | null = null;
@@ -140,6 +142,8 @@ export async function POST(request: NextRequest) {
       description = formData.get('description') as string;
       categoryId = parseInt(formData.get('categoryId') as string);
       basePrice = parseFloat(formData.get('basePrice') as string);
+      wholesalePrice = formData.get('wholesalePrice') ? parseFloat(formData.get('wholesalePrice') as string) : null;
+      festival = formData.get('festival') as string || null;
       stock = parseInt(formData.get('stock') as string) || 0;
       isFeatured = formData.get('isFeatured') === 'true';
       imageUrl = formData.get('imageUrl') as string || null;
@@ -151,6 +155,8 @@ export async function POST(request: NextRequest) {
       description = body.description;
       categoryId = body.categoryId;
       basePrice = body.basePrice;
+      wholesalePrice = body.wholesalePrice ? parseFloat(body.wholesalePrice) : null;
+      festival = body.festival || null;
       stock = body.stock || 0;
       isFeatured = body.isFeatured || false;
       imageUrl = body.imageUrl || null;
@@ -175,12 +181,14 @@ export async function POST(request: NextRequest) {
       .input('description', sql.NVarChar(sql.MAX), description || '')
       .input('categoryId', sql.Int, categoryId)
       .input('basePrice', sql.Decimal(10, 2), basePrice)
+      .input('wholesalePrice', sql.Decimal(10, 2), wholesalePrice)
+      .input('festival', sql.NVarChar(50), festival)
       .input('sku', sql.NVarChar(100), sku)
       .input('isFeatured', sql.Bit, isFeatured || false)
       .query(`
-        INSERT INTO Products (ProductName, Description, CategoryID, BasePrice, SKU, IsFeatured, IsActive, CreatedAt)
+        INSERT INTO Products (ProductName, Description, CategoryID, BasePrice, WholesalePrice, Festival, SKU, IsFeatured, IsActive, CreatedAt)
         OUTPUT INSERTED.ProductID
-        VALUES (@productName, @description, @categoryId, @basePrice, @sku, @isFeatured, 1, GETDATE())
+        VALUES (@productName, @description, @categoryId, @basePrice, @wholesalePrice, @festival, @sku, @isFeatured, 1, GETDATE())
       `);
 
     const productId = result.recordset[0].ProductID;
