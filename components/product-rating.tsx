@@ -104,6 +104,7 @@ export function ProductRating({ productId, productName, onRatingSubmitted }: Pro
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
+          userId: user.id,
           productId,
           rating: ratingData.rating,
           review: ratingData.review.trim(),

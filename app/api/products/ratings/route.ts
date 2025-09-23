@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
           pr.Rating,
           pr.Review,
           pr.CreatedAt,
-          pr.UpdatedAt,
+          pr.UpdatedAt
         FROM ProductRatings pr
         LEFT JOIN Users u ON pr.UserID = u.UserID
         WHERE pr.ProductID = @productId
@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
       data: {
         ratings: ratingsResult.recordset,
         averageRating: parseFloat(averageRating.toFixed(2)),
+        totalRatings: ratingsResult.recordset.length,
       },
     });
   } catch (error) {
