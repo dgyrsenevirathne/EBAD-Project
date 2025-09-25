@@ -27,13 +27,16 @@ interface Product {
   BasePrice: number
   PrimaryImage: string | null
   Festival: string | null
+  IsFeatured?: number
+  Description?: string
+  Stock?: number
 }
 
 interface BundleItem {
   ProductID: number
   ProductName: string
   BasePrice: number
-  PrimaryImage: string | null
+  PrimaryImage: string
   quantity: number
 }
 
@@ -44,68 +47,92 @@ interface Bundle {
   items: BundleItem[]
 }
 
-const festivalBundles: Record<string, Bundle[]> = {
-  Avurudu: [
-    {
-      name: "Traditional Avurudu Outfit",
-      description: "Complete traditional Sri Lankan New Year attire",
-      discount: 15,
-      items: [
-        { ProductID: 1, ProductName: "Traditional Kandyan Saree", BasePrice: 2500, PrimaryImage: "/traditional-kandyan-saree-front.png", quantity: 1 },
-        { ProductID: 2, ProductName: "Handloom Cotton Blouse", BasePrice: 800, PrimaryImage: "/handloom-cotton-blouse.png", quantity: 1 },
-        { ProductID: 3, ProductName: "Traditional Jewelry Set", BasePrice: 1200, PrimaryImage: null, quantity: 1 }
-      ]
-    }
-  ],
-  Vesak: [
-    {
-      name: "Vesak Celebration Set",
-      description: "White attire and accessories for Vesak Poya",
-      discount: 10,
-      items: [
-        { ProductID: 4, ProductName: "White Cotton Saree", BasePrice: 1800, PrimaryImage: null, quantity: 1 },
-        { ProductID: 5, ProductName: "Lotus Motif Accessories", BasePrice: 500, PrimaryImage: null, quantity: 1 }
-      ]
-    }
-  ],
-  Christmas: [
-    {
-      name: "Festive Christmas Collection",
-      description: "Colorful traditional wear for Christmas celebrations",
-      discount: 12,
-      items: [
-        { ProductID: 6, ProductName: "Red and Gold Saree", BasePrice: 2200, PrimaryImage: null, quantity: 1 },
-        { ProductID: 7, ProductName: "Christmas Accessories", BasePrice: 600, PrimaryImage: null, quantity: 1 }
-      ]
-    }
-  ]
-}
-
-export function FestivalBundleGenerator({ cartItems, onAddToCart }: { cartItems: CartItem[], onAddToCart: (productId: number, quantity: number) => void }) {
+export function FestivalBundleGenerator({ cartItems, onAddToCart }: { cartItems: CartItem[], onAddToCart: (productId: number, quantity: number) => Promise<void> }) {
   const [suggestedBundles, setSuggestedBundles] = useState<Bundle[]>([])
   const [addedBundles, setAddedBundles] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const festivalsInCart = new Set(cartItems.map(item => item.Festival).filter(Boolean))
-    const bundles: Bundle[] = []
+    const festivalsInCart = [...new Set(cartItems
+      .filter(item => item.Festival !== null)
+      .map(item => item.Festival as string)
+    )]
 
-    festivalsInCart.forEach(festival => {
-      if (festival && festivalBundles[festival]) {
-        bundles.push(...festivalBundles[festival])
+    if (festivalsInCart.length === 0) {
+      setSuggestedBundles([])
+      return
+    }
+
+    const generateBundles = async () => {
+      setLoading(true)
+      const allBundles: Bundle[] = []
+
+      for (const festival of festivalsInCart) {
+        // Get unique product IDs in cart for this festival to exclude
+        const cartProductIdsForFestival = cartItems
+          .filter(item => item.Festival === festival)
+          .map(item => item.ProductID)
+
+        try {
+          const response = await fetch(`/api/products/festival-bundles?festival=${encodeURIComponent(festival)}&cartProductIds=${cartProductIdsForFestival.join(',')}`)
+          const data = await response.json()
+
+          if (data.success && data.data.length > 0) {
+            const products: Product[] = data.data
+
+            // Generate 2-item bundle if possible (10% off)
+            if (products.length >= 2) {
+              const bundle2 = createBundle(products.slice(0, 2), festival, 2, 10)
+              allBundles.push(bundle2)
+            }
+
+            // Generate 3-item bundle if possible (20% off)
+            if (products.length >= 3) {
+              const bundle3 = createBundle(products.slice(0, 3), festival, 3, 20)
+              allBundles.push(bundle3)
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch bundles for ${festival}:`, error)
+        }
       }
-    })
 
-    setSuggestedBundles(bundles)
+      setSuggestedBundles(allBundles)
+      setLoading(false)
+    }
+
+    generateBundles()
   }, [cartItems])
+
+  const createBundle = (products: Product[], festival: string, itemCount: number, discount: number): Bundle => {
+    const items: BundleItem[] = products.map(product => ({
+      ProductID: product.ProductID,
+      ProductName: product.ProductName,
+      BasePrice: product.BasePrice,
+      PrimaryImage: product.PrimaryImage || '/placeholder.svg',
+      quantity: 1
+    }))
+
+    return {
+      name: `${festival} Festival Bundle - ${itemCount} Items`,
+      description: `Complete your ${festival} celebration with these complementary items and save ${discount}%!`,
+      discount,
+      items
+    }
+  }
 
   const addBundleToCart = async (bundle: Bundle) => {
     for (const item of bundle.items) {
-      await onAddToCart(item.ProductID, item.quantity)
+      try {
+        await onAddToCart(item.ProductID, item.quantity)
+      } catch (error) {
+        console.error(`Failed to add ${item.ProductName} to cart:`, error)
+      }
     }
     setAddedBundles(prev => new Set(prev).add(bundle.name))
   }
 
-  if (suggestedBundles.length === 0) {
+  if (loading || suggestedBundles.length === 0) {
     return null
   }
 

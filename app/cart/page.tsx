@@ -251,8 +251,46 @@ export default function CartPage() {
     }
   }
 
-  const subtotal = cartItems.reduce((sum, item) => sum + item.BasePrice * item.Quantity, 0)
-  const savings = 0 // Could be calculated if original prices are available
+  // Calculate subtotal with festival bundle discounts
+  const calculateSubtotalWithDiscounts = () => {
+    const festivalGroups = cartItems.reduce((groups, item) => {
+      if (item.Festival) {
+        if (!groups[item.Festival]) {
+          groups[item.Festival] = []
+        }
+        groups[item.Festival].push(item)
+      }
+      return groups
+    }, {} as Record<string, CartItem[]>)
+
+    let subtotal = 0
+    let bundleSavings = 0
+
+    // Non-festival items
+    const nonFestivalItems = cartItems.filter(item => !item.Festival)
+    subtotal += nonFestivalItems.reduce((sum, item) => sum + item.BasePrice * item.Quantity, 0)
+
+    // Festival groups
+    Object.values(festivalGroups).forEach(group => {
+      const groupCount = group.reduce((total, item) => total + item.Quantity, 0)
+      const groupTotal = group.reduce((sum, item) => sum + item.BasePrice * item.Quantity, 0)
+
+      let discount = 0
+      if (groupCount >= 3) {
+        discount = 0.20 // 20% off for 3+ items
+      } else if (groupCount >= 2) {
+        discount = 0.10 // 10% off for 2 items
+      }
+
+      const discountedGroupTotal = groupTotal * (1 - discount)
+      subtotal += discountedGroupTotal
+      bundleSavings += groupTotal * discount
+    })
+
+    return { subtotal, bundleSavings }
+  }
+
+  const { subtotal, bundleSavings } = calculateSubtotalWithDiscounts()
   const promoDiscount = appliedPromo?.discount || 0
   const pointsDiscount = usePoints ? Math.min(loyaltyPoints * 5, subtotal * 0.2) : 0 // 1 point = LKR 5, max 20% of subtotal
   const shippingCost = subtotal >= 5000 ? 0 : 500
@@ -590,10 +628,10 @@ export default function CartPage() {
                     <span>Subtotal</span>
                     <span>LKR {subtotal.toLocaleString()}</span>
                   </div>
-                  {savings > 0 && (
+                  {bundleSavings > 0 && (
                     <div className="flex justify-between text-green-600">
-                      <span>You saved</span>
-                      <span>-LKR {savings.toLocaleString()}</span>
+                      <span>Festival Bundle Discount</span>
+                      <span>-LKR {bundleSavings.toLocaleString()}</span>
                     </div>
                   )}
                   {appliedPromo && (
