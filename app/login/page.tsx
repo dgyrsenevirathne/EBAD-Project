@@ -32,7 +32,7 @@ export default function LoginPage() {
       const success = await login(formData.email, formData.password)
 
       if (success) {
-        router.push("/profile")
+        router.push("/")
       } else {
         alert("Login failed")
       }
