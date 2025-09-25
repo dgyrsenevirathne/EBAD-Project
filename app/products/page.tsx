@@ -14,6 +14,7 @@ import { Search, Filter, Star, Heart, ArrowLeft, Grid, List } from "lucide-react
 import { CartDrawer } from "@/components/cart-drawer"
 import { useAuth } from "@/components/auth-provider"
 import { useRouter } from "next/navigation"
+import { useTranslation } from "@/components/translation-provider"
 
 interface Product {
   ProductID: number
@@ -33,18 +34,19 @@ interface ProductRating {
   totalRatings: number
 }
 
-const categories = [
-  { id: 0, name: "All" },
-  { id: 1, name: "Men" },
-  { id: 2, name: "Women" },
-  { id: 3, name: "Kids" },
-]
-const subcategories = ["All", "Sarees", "Shirts", "Dresses", "Traditional", "Blouses", "Wedding"]
-const colors = ["Red", "Blue", "Gold", "Green", "Brown", "Pink", "Yellow", "White", "Cream", "Light Blue", "Silver"]
-
 export default function ProductsPage() {
   const { user, token } = useAuth()
   const router = useRouter()
+  const { t } = useTranslation()
+
+  const categories = [
+    { id: 0, name: t("category.all") },
+    { id: 1, name: t("category.men") },
+    { id: 2, name: t("category.women") },
+    { id: 3, name: t("category.kids") },
+  ]
+  const subcategories = [t("subcategory.all"), t("subcategory.sarees"), t("subcategory.shirts"), t("subcategory.dresses"), t("subcategory.traditional"), t("subcategory.blouses"), t("subcategory.wedding")]
+  const colors = [t("color.red"), t("color.blue"), t("color.gold"), t("color.green"), t("color.brown"), t("color.pink"), t("color.yellow"), t("color.white"), t("color.cream"), t("color.lightBlue"), t("color.silver")]
   const [products, setProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -304,29 +306,29 @@ export default function ProductsPage() {
               <Link href="/">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back
+                  {t("common.back")}
                 </Button>
               </Link>
-              <h1 className="text-2xl font-bold text-primary">Ceylon Threads</h1>
+              <h1 className="text-2xl font-bold text-primary">{t("brand.name")}</h1>
             </div>
             <div className="flex items-center space-x-2">
               {user && (
                 <Link href="/wishlist">
                   <Button variant="ghost" size="sm">
-                    Wishlist
+                    {t("common.wishlist")}
                   </Button>
                 </Link>
               )}
               {user ? (
                 <Link href="/profile">
                   <Button variant="ghost" size="sm">
-                    Profile
+                    {t("common.profile")}
                   </Button>
                 </Link>
               ) : (
                 <Link href="/login">
                   <Button variant="ghost" size="sm">
-                    Login
+                    {t("common.login")}
                   </Button>
                 </Link>
               )}
@@ -342,11 +344,11 @@ export default function ProductsPage() {
           <div className={`lg:w-64 ${showFilters ? "block" : "hidden lg:block"}`}>
             <Card className="p-6 space-y-6">
               <div>
-                <h3 className="font-semibold mb-3">Search</h3>
+                <h3 className="font-semibold mb-3">{t("filters.search")}</h3>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search products..."
+                    placeholder={t("filters.searchPlaceholder")}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
@@ -355,7 +357,7 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <h3 className="font-semibold mb-3">Category</h3>
+                <h3 className="font-semibold mb-3">{t("filters.category")}</h3>
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                   <SelectTrigger>
                     <SelectValue />
@@ -371,7 +373,7 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <h3 className="font-semibold mb-3">Subcategory</h3>
+                <h3 className="font-semibold mb-3">{t("filters.subcategory")}</h3>
                 <Select value={selectedSubcategory} onValueChange={setSelectedSubcategory}>
                   <SelectTrigger>
                     <SelectValue />
@@ -387,7 +389,7 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <h3 className="font-semibold mb-3">Price Range</h3>
+                <h3 className="font-semibold mb-3">{t("filters.priceRange")}</h3>
                 <div className="space-y-3">
                   <Slider
                     value={priceRange}
@@ -405,7 +407,7 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <h3 className="font-semibold mb-3">Colors</h3>
+                <h3 className="font-semibold mb-3">{t("filters.colors")}</h3>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {colors.map((color) => (
                     <div key={color} className="flex items-center space-x-2">
@@ -423,11 +425,11 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <h3 className="font-semibold mb-3">Spending Limit</h3>
+                <h3 className="font-semibold mb-3">{t("filters.spendingLimit")}</h3>
                 <div className="space-y-2">
                   <Input
                     type="number"
-                    placeholder="Enter limit (LKR)"
+                    placeholder={t("filters.spendingLimitPlaceholder")}
                     value={spendingLimit || ""}
                     onChange={(e) => {
                       const value = e.target.value ? parseInt(e.target.value) : null
@@ -442,11 +444,11 @@ export default function ProductsPage() {
                     step="100"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Set a maximum amount you want to spend. You'll be alerted when adding items would exceed this limit.
+                    {t("filters.spendingLimitDescription")}
                   </p>
                   {currentCartTotal > 0 && (
                     <p className="text-xs text-orange-600">
-                      Current cart total: LKR {currentCartTotal.toLocaleString()}
+                      {t("filters.currentCartTotal")} LKR {currentCartTotal.toLocaleString()}
                     </p>
                   )}
                 </div>
@@ -461,10 +463,10 @@ export default function ProductsPage() {
               <div className="flex items-center gap-4">
                 <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="lg:hidden">
                   <Filter className="h-4 w-4 mr-2" />
-                  Filters
+                  {t("filters.filters")}
                 </Button>
               <p className="text-sm text-muted-foreground">
-                Showing {sortedProducts.length} of {products.length} products
+                {t("products.showing")} {sortedProducts.length} {t("products.of")} {products.length} {t("products.count")}
               </p>
               </div>
 
@@ -491,11 +493,11 @@ export default function ProductsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="featured">Featured</SelectItem>
-                    <SelectItem value="newest">Newest</SelectItem>
-                    <SelectItem value="price-low">Price: Low to High</SelectItem>
-                    <SelectItem value="price-high">Price: High to Low</SelectItem>
-                    <SelectItem value="rating">Highest Rated</SelectItem>
+                    <SelectItem value="featured">{t("products.featured")}</SelectItem>
+                    <SelectItem value="newest">{t("products.newest")}</SelectItem>
+                    <SelectItem value="price-low">{t("products.priceLowToHigh")}</SelectItem>
+                    <SelectItem value="price-high">{t("products.priceHighToLow")}</SelectItem>
+                    <SelectItem value="rating">{t("products.highestRated")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -523,7 +525,7 @@ export default function ProductsPage() {
                       className="w-full h-full object-cover rounded-t-lg group-hover:scale-105 transition-transform"
                     />
                     {product.IsFeatured && (
-                      <Badge className="absolute top-2 left-2 bg-orange-600 hover:bg-orange-700">Featured</Badge>
+                      <Badge className="absolute top-2 left-2 bg-orange-600 hover:bg-orange-700">{t("products.featured")}</Badge>
                     )}
                     <Button
                       variant="outline"
@@ -552,7 +554,7 @@ export default function ProductsPage() {
                           {renderStars(productRatings[product.ProductID].averageRating, 'sm')}
                           <span className="text-sm text-muted-foreground">
                             {productRatings[product.ProductID].averageRating.toFixed(1)}
-                            ({productRatings[product.ProductID].totalRatings} {productRatings[product.ProductID].totalRatings === 1 ? 'review' : 'reviews'})
+                            ({productRatings[product.ProductID].totalRatings} {productRatings[product.ProductID].totalRatings === 1 ? t("products.review") : t("products.reviews")})
                           </span>
                         </div>
                       )}
@@ -567,14 +569,14 @@ export default function ProductsPage() {
                       </div>
                       <div className="flex flex-wrap gap-1">
                         <Badge variant="outline" className="text-xs">
-                          {product.VariantCount} variants
+                          {product.VariantCount} {t("products.variants")}
                         </Badge>
                       </div>
                       {product.TotalStock <= 5 && product.TotalStock > 0 && (
-                        <p className="text-xs text-orange-600">Only {product.TotalStock} left in stock</p>
+                        <p className="text-xs text-orange-600">{t("products.onlyLeft")} {product.TotalStock} {t("products.leftInStock")}</p>
                       )}
                       {product.TotalStock === 0 && (
-                        <p className="text-xs text-red-600">Out of stock</p>
+                        <p className="text-xs text-red-600">{t("products.outOfStock")}</p>
                       )}
                       <div className="flex gap-2 pt-2">
                         <Button
@@ -583,11 +585,11 @@ export default function ProductsPage() {
                           disabled={product.TotalStock === 0}
                           onClick={(e) => addToCart(product.ProductID, e)}
                         >
-                          Add to Cart
+                          {t("products.addToCart")}
                         </Button>
                         {product.TotalStock === 0 && (
                           <Button variant="outline" size="sm">
-                            Notify Me
+                            {t("products.notifyMe")}
                           </Button>
                         )}
                       </div>
@@ -600,7 +602,7 @@ export default function ProductsPage() {
 
             {sortedProducts.length === 0 && (
               <div className="text-center py-12">
-                <p className="text-muted-foreground">No products found matching your criteria.</p>
+                <p className="text-muted-foreground">{t("products.noProductsFound")}</p>
                 <Button
                   variant="outline"
                   className="mt-4 bg-transparent"
@@ -612,7 +614,7 @@ export default function ProductsPage() {
                     setPriceRange([0, 30000])
                   }}
                 >
-                  Clear Filters
+                  {t("products.clearFilters")}
                 </Button>
               </div>
             )}
