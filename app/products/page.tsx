@@ -57,6 +57,8 @@ export default function ProductsPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [cartRefreshTrigger, setCartRefreshTrigger] = useState(0)
   const [productRatings, setProductRatings] = useState<Record<number, ProductRating>>({})
+  const [spendingLimit, setSpendingLimit] = useState<number | null>(null)
+  const [currentCartTotal, setCurrentCartTotal] = useState(0)
 
   const fetchProducts = async () => {
     try {
@@ -112,6 +114,35 @@ export default function ProductsPage() {
     event?.stopPropagation()
 
     if (user && token) {
+      // Check spending limit before adding to cart
+      if (spendingLimit) {
+        try {
+          // Get current cart total
+          const cartResponse = await fetch('/api/cart', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          })
+          const cartData = await cartResponse.json()
+          if (cartData.success) {
+            const currentTotal = cartData.data.reduce((sum: number, item: any) => sum + item.BasePrice * item.Quantity, 0)
+            // Get product price
+            const product = products.find(p => p.ProductID === productId)
+            if (product) {
+              const newTotal = currentTotal + product.BasePrice
+              if (newTotal > spendingLimit) {
+                const proceed = confirm(`Adding this item would exceed your spending limit. Current cart: LKR ${currentTotal.toLocaleString()}, Adding: LKR ${product.BasePrice.toLocaleString()}, New total: LKR ${newTotal.toLocaleString()}. Your limit is LKR ${spendingLimit.toLocaleString()}. Click OK to proceed anyway.`)
+                if (!proceed) {
+                  return
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to check spending limit:', error)
+        }
+      }
+
       // Add to API for logged-in users
       try {
         const response = await fetch('/api/cart', {
@@ -232,6 +263,36 @@ export default function ProductsPage() {
       fetchProductRatings(productIds)
     }
   }, [products])
+
+  // Load spending limit from localStorage and fetch current cart total
+  useEffect(() => {
+    const savedLimit = localStorage.getItem('spendingLimit')
+    if (savedLimit) {
+      setSpendingLimit(parseInt(savedLimit))
+    }
+
+    // Fetch current cart total
+    const fetchCartTotal = async () => {
+      if (user && token) {
+        try {
+          const response = await fetch('/api/cart', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          })
+          const data = await response.json()
+          if (data.success) {
+            const total = data.data.reduce((sum: number, item: any) => sum + item.BasePrice * item.Quantity, 0)
+            setCurrentCartTotal(total)
+          }
+        } catch (error) {
+          console.error('Failed to fetch cart total:', error)
+        }
+      }
+    }
+
+    fetchCartTotal()
+  }, [user, token])
 
   return (
     <div className="min-h-screen bg-background">
@@ -358,6 +419,36 @@ export default function ProductsPage() {
                       </Label>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-3">Spending Limit</h3>
+                <div className="space-y-2">
+                  <Input
+                    type="number"
+                    placeholder="Enter limit (LKR)"
+                    value={spendingLimit || ""}
+                    onChange={(e) => {
+                      const value = e.target.value ? parseInt(e.target.value) : null
+                      setSpendingLimit(value)
+                      if (value) {
+                        localStorage.setItem('spendingLimit', value.toString())
+                      } else {
+                        localStorage.removeItem('spendingLimit')
+                      }
+                    }}
+                    min="0"
+                    step="100"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Set a maximum amount you want to spend. You'll be alerted when adding items would exceed this limit.
+                  </p>
+                  {currentCartTotal > 0 && (
+                    <p className="text-xs text-orange-600">
+                      Current cart total: LKR {currentCartTotal.toLocaleString()}
+                    </p>
+                  )}
                 </div>
               </div>
             </Card>
