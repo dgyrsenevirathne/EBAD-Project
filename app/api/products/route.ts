@@ -14,9 +14,12 @@ export async function GET(request: NextRequest) {
   const sortOrder = searchParams.get('sortOrder') || 'desc';
 
   let pool: sql.ConnectionPool | null = null;
+  const maxRetries = 3;
+  let lastError: any;
 
-  try {
-    pool = await sql.connect(sqlConfig);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      pool = await sql.connect(sqlConfig);
 
     const whereConditions: string[] = ['p.IsActive = 1'];
     const requestObj = pool.request();
@@ -91,201 +94,236 @@ export async function GET(request: NextRequest) {
     const totalProducts = countResult.recordset[0].total;
     const totalPages = Math.ceil(totalProducts / limit);
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        products: productsResult.recordset,
-        pagination: {
-          currentPage: page,
-          totalPages,
-          totalProducts,
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1,
+      return NextResponse.json({
+        success: true,
+        data: {
+          products: productsResult.recordset,
+          pagination: {
+            currentPage: page,
+            totalPages,
+            totalProducts,
+            hasNextPage: page < totalPages,
+            hasPrevPage: page > 1,
+          },
         },
-      },
-    });
+      });
 
-  } catch (error) {
-    console.error('Get products error:', error);
-    return NextResponse.json(
-      { success: false, message: 'Failed to fetch products' },
-      { status: 500 }
-    );
-  } finally {
-    if (pool) {
-      await pool.close();
+    } catch (error) {
+      console.error(`Get products error (attempt ${attempt}/${maxRetries}):`, error);
+      lastError = error;
+
+      // Close the pool if it exists
+      if (pool) {
+        try {
+          await pool.close();
+        } catch (closeError) {
+          console.error('Error closing pool:', closeError);
+        }
+        pool = null;
+      }
+
+      // If this is not the last attempt, wait before retrying
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+      }
     }
   }
+
+  // All retries failed
+  console.error('All retry attempts failed:', lastError);
+  return NextResponse.json(
+    { success: false, message: 'Failed to fetch products after multiple attempts' },
+    { status: 500 }
+  );
 }
 
 export async function POST(request: NextRequest) {
   let pool: sql.ConnectionPool | null = null;
+  const maxRetries = 3;
+  let lastError: any;
 
-  try {
-    const contentType = request.headers.get('content-type') || '';
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const contentType = request.headers.get('content-type') || '';
 
-    let productName: string;
-    let description: string;
-    let categoryId: number;
-    let basePrice: number;
-    let wholesalePrice: number | null = null;
-    let festival: string | null = null;
-    let stock: number;
-    let isFeatured: boolean;
-    let imageUrl: string | null = null;
-    let imageFile: File | null = null;
-    let variants: any[] = [];
+      let productName: string;
+      let description: string;
+      let categoryId: number;
+      let basePrice: number;
+      let wholesalePrice: number | null = null;
+      let festival: string | null = null;
+      let stock: number;
+      let isFeatured: boolean;
+      let imageUrl: string | null = null;
+      let imageFile: File | null = null;
+      let variants: any[] = [];
 
-    if (contentType.includes('multipart/form-data')) {
-      // Handle file upload
-      const formData = await request.formData();
-      productName = formData.get('productName') as string;
-      description = formData.get('description') as string;
-      categoryId = parseInt(formData.get('categoryId') as string);
-      basePrice = parseFloat(formData.get('basePrice') as string);
-      wholesalePrice = formData.get('wholesalePrice') ? parseFloat(formData.get('wholesalePrice') as string) : null;
-      festival = formData.get('festival') as string || null;
-      stock = parseInt(formData.get('stock') as string) || 0;
-      isFeatured = formData.get('isFeatured') === 'true';
-      imageUrl = formData.get('imageUrl') as string || null;
-      imageFile = formData.get('imageFile') as File || null;
+      if (contentType.includes('multipart/form-data')) {
+        // Handle file upload
+        const formData = await request.formData();
+        productName = formData.get('productName') as string;
+        description = formData.get('description') as string;
+        categoryId = parseInt(formData.get('categoryId') as string);
+        basePrice = parseFloat(formData.get('basePrice') as string);
+        wholesalePrice = formData.get('wholesalePrice') ? parseFloat(formData.get('wholesalePrice') as string) : null;
+        festival = formData.get('festival') as string || null;
+        stock = parseInt(formData.get('stock') as string) || 0;
+        isFeatured = formData.get('isFeatured') === 'true';
+        imageUrl = formData.get('imageUrl') as string || null;
+        imageFile = formData.get('imageFile') as File || null;
 
-      // Parse variants from FormData
-      const variantsData = formData.get('variants') as string;
-      if (variantsData) {
-        try {
-          variants = JSON.parse(variantsData);
-        } catch (error) {
-          console.error('Error parsing variants:', error);
+        // Parse variants from FormData
+        const variantsData = formData.get('variants') as string;
+        if (variantsData) {
+          try {
+            variants = JSON.parse(variantsData);
+          } catch (error) {
+            console.error('Error parsing variants:', error);
+          }
         }
+      } else {
+        // Handle JSON request
+        const body = await request.json();
+        productName = body.productName;
+        description = body.description;
+        categoryId = body.categoryId;
+        basePrice = body.basePrice;
+        wholesalePrice = body.wholesalePrice ? parseFloat(body.wholesalePrice) : null;
+        festival = body.festival || null;
+        stock = body.stock || 0;
+        isFeatured = body.isFeatured || false;
+        imageUrl = body.imageUrl || null;
+        variants = body.variants || [];
       }
-    } else {
-      // Handle JSON request
-      const body = await request.json();
-      productName = body.productName;
-      description = body.description;
-      categoryId = body.categoryId;
-      basePrice = body.basePrice;
-      wholesalePrice = body.wholesalePrice ? parseFloat(body.wholesalePrice) : null;
-      festival = body.festival || null;
-      stock = body.stock || 0;
-      isFeatured = body.isFeatured || false;
-      imageUrl = body.imageUrl || null;
-      variants = body.variants || [];
-    }
 
-    // Validation
-    if (!productName || !categoryId || !basePrice) {
-      return NextResponse.json(
-        { success: false, message: 'Product name, category, and base price are required' },
-        { status: 400 }
-      );
-    }
+      // Validation
+      if (!productName || !categoryId || !basePrice) {
+        return NextResponse.json(
+          { success: false, message: 'Product name, category, and base price are required' },
+          { status: 400 }
+        );
+      }
 
-    pool = await sql.connect(sqlConfig);
+      pool = await sql.connect(sqlConfig);
 
-    // Generate unique SKU
-    const sku = 'PROD-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+      // Generate unique SKU
+      const sku = 'PROD-' + Math.random().toString(36).substr(2, 9).toUpperCase();
 
-    // Insert product
-    const result = await pool.request()
-      .input('productName', sql.NVarChar(255), productName)
-      .input('description', sql.NVarChar(sql.MAX), description || '')
-      .input('categoryId', sql.Int, categoryId)
-      .input('basePrice', sql.Decimal(10, 2), basePrice)
-      .input('wholesalePrice', sql.Decimal(10, 2), wholesalePrice)
-      .input('festival', sql.NVarChar(50), festival)
-      .input('sku', sql.NVarChar(100), sku)
-      .input('isFeatured', sql.Bit, isFeatured || false)
-      .query(`
-        INSERT INTO Products (ProductName, Description, CategoryID, BasePrice, WholesalePrice, Festival, SKU, IsFeatured, IsActive, CreatedAt)
-        OUTPUT INSERTED.ProductID
-        VALUES (@productName, @description, @categoryId, @basePrice, @wholesalePrice, @festival, @sku, @isFeatured, 1, GETDATE())
-      `);
+      // Insert product
+      const result = await pool.request()
+        .input('productName', sql.NVarChar(255), productName)
+        .input('description', sql.NVarChar(sql.MAX), description || '')
+        .input('categoryId', sql.Int, categoryId)
+        .input('basePrice', sql.Decimal(10, 2), basePrice)
+        .input('wholesalePrice', sql.Decimal(10, 2), wholesalePrice)
+        .input('festival', sql.NVarChar(50), festival)
+        .input('sku', sql.NVarChar(100), sku)
+        .input('isFeatured', sql.Bit, isFeatured || false)
+        .query(`
+          INSERT INTO Products (ProductName, Description, CategoryID, BasePrice, WholesalePrice, Festival, SKU, IsFeatured, IsActive, CreatedAt)
+          OUTPUT INSERTED.ProductID
+          VALUES (@productName, @description, @categoryId, @basePrice, @wholesalePrice, @festival, @sku, @isFeatured, 1, GETDATE())
+        `);
 
-    const productId = result.recordset[0].ProductID;
+      const productId = result.recordset[0].ProductID;
 
-    // Handle variants
-    if (variants && variants.length > 0) {
-      // Insert provided variants
-      for (const variant of variants) {
-        const variantSku = `${sku}-${variant.size || 'DEFAULT'}-${variant.color || 'DEFAULT'}`.replace(/[^A-Z0-9-]/gi, '');
+      // Handle variants
+      if (variants && variants.length > 0) {
+        // Insert provided variants
+        for (const variant of variants) {
+          const variantSku = `${sku}-${variant.size || 'DEFAULT'}-${variant.color || 'DEFAULT'}`.replace(/[^A-Z0-9-]/gi, '');
+          await pool.request()
+            .input('productId', sql.Int, productId)
+            .input('size', sql.NVarChar(50), variant.size || null)
+            .input('color', sql.NVarChar(50), variant.color || null)
+            .input('stock', sql.Int, parseInt(variant.stock) || 0)
+            .input('variantSku', sql.NVarChar(100), variantSku)
+            .query(`
+              INSERT INTO ProductVariants (ProductID, Size, Color, Stock, VariantSKU, IsActive)
+              VALUES (@productId, @size, @color, @stock, @variantSku, 1)
+            `);
+        }
+      } else {
+        // Insert default variant with stock (backward compatibility)
+        const variantStock = stock || 0;
+        const variantSku = sku + '-DEFAULT';
         await pool.request()
           .input('productId', sql.Int, productId)
-          .input('size', sql.NVarChar(50), variant.size || null)
-          .input('color', sql.NVarChar(50), variant.color || null)
-          .input('stock', sql.Int, parseInt(variant.stock) || 0)
+          .input('stock', sql.Int, variantStock)
           .input('variantSku', sql.NVarChar(100), variantSku)
           .query(`
-            INSERT INTO ProductVariants (ProductID, Size, Color, Stock, VariantSKU, IsActive)
-            VALUES (@productId, @size, @color, @stock, @variantSku, 1)
+            INSERT INTO ProductVariants (ProductID, Stock, VariantSKU, IsActive)
+            VALUES (@productId, @stock, @variantSku, 1)
           `);
       }
-    } else {
-      // Insert default variant with stock (backward compatibility)
-      const variantStock = stock || 0;
-      const variantSku = sku + '-DEFAULT';
-      await pool.request()
-        .input('productId', sql.Int, productId)
-        .input('stock', sql.Int, variantStock)
-        .input('variantSku', sql.NVarChar(100), variantSku)
-        .query(`
-          INSERT INTO ProductVariants (ProductID, Stock, VariantSKU, IsActive)
-          VALUES (@productId, @stock, @variantSku, 1)
-        `);
-    }
 
-    // Handle image
-    if (imageFile) {
-      // Handle file upload - save to public/uploads directory
-      const bytes = await imageFile.arrayBuffer();
-      const buffer = Buffer.from(bytes);
+      // Handle image
+      if (imageFile) {
+        // Handle file upload - save to public/uploads directory
+        const bytes = await imageFile.arrayBuffer();
+        const buffer = Buffer.from(bytes);
 
-      // Generate unique filename
-      const fileExtension = imageFile.name.split('.').pop();
-      const fileName = `product-${productId}-${Date.now()}.${fileExtension}`;
-      const filePath = `public/uploads/${fileName}`;
+        // Generate unique filename
+        const fileExtension = imageFile.name.split('.').pop();
+        const fileName = `product-${productId}-${Date.now()}.${fileExtension}`;
+        const filePath = `public/uploads/${fileName}`;
 
-      // Save file to disk (you might want to use a cloud storage service in production)
-      const fs = require('fs').promises;
-      await fs.mkdir('public/uploads', { recursive: true });
-      await fs.writeFile(filePath, buffer);
+        // Save file to disk (you might want to use a cloud storage service in production)
+        const fs = require('fs').promises;
+        await fs.mkdir('public/uploads', { recursive: true });
+        await fs.writeFile(filePath, buffer);
 
-      // Store relative path in database
-      const imagePath = `/uploads/${fileName}`;
-      await pool.request()
-        .input('productId', sql.Int, productId)
-        .input('imageUrl', sql.NVarChar(500), imagePath)
-        .query(`
-          INSERT INTO ProductImages (ProductID, ImageURL, IsPrimary)
-          VALUES (@productId, @imageUrl, 1)
-        `);
-    } else if (imageUrl) {
-      // Handle URL
-      await pool.request()
-        .input('productId', sql.Int, productId)
-        .input('imageUrl', sql.NVarChar(500), imageUrl)
-        .query(`
-          INSERT INTO ProductImages (ProductID, ImageURL, IsPrimary)
-          VALUES (@productId, @imageUrl, 1)
-        `);
-    }
+        // Store relative path in database
+        const imagePath = `/uploads/${fileName}`;
+        await pool.request()
+          .input('productId', sql.Int, productId)
+          .input('imageUrl', sql.NVarChar(500), imagePath)
+          .query(`
+            INSERT INTO ProductImages (ProductID, ImageURL, IsPrimary)
+            VALUES (@productId, @imageUrl, 1)
+          `);
+      } else if (imageUrl) {
+        // Handle URL
+        await pool.request()
+          .input('productId', sql.Int, productId)
+          .input('imageUrl', sql.NVarChar(500), imageUrl)
+          .query(`
+            INSERT INTO ProductImages (ProductID, ImageURL, IsPrimary)
+            VALUES (@productId, @imageUrl, 1)
+          `);
+      }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Product added successfully',
-      data: { productId }
-    });
+      return NextResponse.json({
+        success: true,
+        message: 'Product added successfully',
+        data: { productId }
+      });
 
-  } catch (error) {
-    console.error('Add product error:', error);
-    return NextResponse.json(
-      { success: false, message: 'Failed to add product' },
-      { status: 500 }
-    );
-  } finally {
-    if (pool) {
-      await pool.close();
+    } catch (error) {
+      console.error(`Add product error (attempt ${attempt}/${maxRetries}):`, error);
+      lastError = error;
+
+      // Close the pool if it exists
+      if (pool) {
+        try {
+          await pool.close();
+        } catch (closeError) {
+          console.error('Error closing pool:', closeError);
+        }
+        pool = null;
+      }
+
+      // If this is not the last attempt, wait before retrying
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+      }
     }
   }
+
+  // All retries failed
+  console.error('All retry attempts failed:', lastError);
+  return NextResponse.json(
+    { success: false, message: 'Failed to add product after multiple attempts' },
+    { status: 500 }
+  );
 }

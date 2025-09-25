@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth-provider"
 import { Textarea } from "@/components/ui/textarea"
 
 import { useState, useEffect } from "react"
+import { use } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -24,7 +25,7 @@ interface Product {
   CategoryName: string
   Description: string
   IsFeatured: boolean
-  variants: any[]
+  variants?: any[]
   images: any[]
   averageRating: number
   ratingCount: number
@@ -38,9 +39,13 @@ interface Rating {
   name: string
 }
 
-export default function ProductDetailPage({ params }: { params: { id: string } }) {
+export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const paramsData = use(params)
+  const id = paramsData.id
+
   const { user, token } = useAuth()
   const [selectedImage, setSelectedImage] = useState(0)
+  const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null)
   const [product, setProduct] = useState<Product | null>(null)
   const [ratings, setRatings] = useState<Rating[]>([])
   const [loading, setLoading] = useState(true)
@@ -52,10 +57,14 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const response = await fetch(`/api/products/${params.id}`)
+        const response = await fetch(`/api/products/${id}`)
         const data = await response.json()
         if (data.success) {
           setProduct(data.data)
+          // Set default variant if available
+          if (data.data.variants && data.data.variants.length > 0) {
+            setSelectedVariantId(data.data.variants![0].VariantID)
+          }
         }
       } catch (error) {
         console.error('Failed to fetch product:', error)
@@ -66,7 +75,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
 
     const fetchRatings = async () => {
       try {
-        const response = await fetch(`/api/products/ratings?productId=${params.id}`)
+        const response = await fetch(`/api/products/ratings?productId=${id}`)
         const data = await response.json()
         if (data.success) {
           setRatings(data.data.ratings)
@@ -78,13 +87,20 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
 
     fetchProduct()
     fetchRatings()
-  }, [params.id])
+  }, [id])
 
   const handleQuantityChange = (change: number) => {
     const newQuantity = quantity + change
-    if (newQuantity >= 1 && newQuantity <= (product?.variants?.[0]?.Stock || 1)) {
+    const selectedVariant = product?.variants?.find(v => v.VariantID === selectedVariantId)
+    const maxStock = selectedVariant?.Stock || 999999
+    if (newQuantity >= 1 && newQuantity <= maxStock) {
       setQuantity(newQuantity)
     }
+  }
+
+  const handleVariantChange = (variantId: number) => {
+    setSelectedVariantId(variantId)
+    setQuantity(1) // Reset quantity when variant changes
   }
 
   const addToCart = async () => {
@@ -99,6 +115,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
           },
           body: JSON.stringify({
             productId: product?.ProductID,
+            variantId: selectedVariantId,
             quantity: quantity,
           }),
         })
@@ -147,7 +164,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
         alert("Rating submitted successfully!")
         setNewReview('')
         // Refresh ratings
-        const ratingsResponse = await fetch(`/api/products/ratings?productId=${params.id}`)
+        const ratingsResponse = await fetch(`/api/products/ratings?productId=${id}`)
         const ratingsData = await ratingsResponse.json()
         if (ratingsData.success) {
           setRatings(ratingsData.data.ratings)
@@ -284,26 +301,48 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
               )}
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Quantity</Label>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleQuantityChange(-1)} disabled={quantity <= 1}>
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <span className="w-12 text-center font-medium">{quantity}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleQuantityChange(1)}
-                    disabled={quantity >= (product?.variants?.[0]?.Stock || 1)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
+              <div className="space-y-4">
+                {product?.variants && product.variants.length > 0 && (
+                  <div className="relative">
+                    <Label className="text-sm font-medium mb-2 block">Select Variant</Label>
+                    <Select value={selectedVariantId?.toString() || ''} onValueChange={(value) => handleVariantChange(parseInt(value))}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Choose size/color" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" side="bottom" className="z-[9999] w-[180px]">
+                        {product.variants.map((variant) => (
+                          <SelectItem key={variant.VariantID} value={variant.VariantID.toString()}>
+                            {variant.Size ? `${variant.Size}` : ''} {variant.Color ? ` - ${variant.Color}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div>
+                  <Label className="text-sm font-medium mb-2 block">Quantity</Label>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleQuantityChange(-1)} disabled={quantity <= 1}>
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <span className="w-12 text-center font-medium">{quantity}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleQuantityChange(1)}
+                      disabled={quantity >= (product?.variants?.find(v => v.VariantID === selectedVariantId)?.Stock || 999999)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {(() => {
+                      const selectedVariant = product?.variants?.find(v => v.VariantID === selectedVariantId)
+                      return selectedVariant ? `${selectedVariant.Stock} items available` : `${product?.variants?.[0]?.Stock || 0} items available`
+                    })()}
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">{product?.variants?.[0]?.Stock || 0} items available</p>
               </div>
-            </div>
 
             <div className="flex gap-4">
               <Button size="lg" className="flex-1" onClick={addToCart}>

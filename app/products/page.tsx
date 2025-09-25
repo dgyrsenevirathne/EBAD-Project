@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Search, Filter, Star, Heart, ArrowLeft, Grid, List } from "lucide-react"
 import { CartDrawer } from "@/components/cart-drawer"
 import { useAuth } from "@/components/auth-provider"
+import { useRouter } from "next/navigation"
 
 interface Product {
   ProductID: number
@@ -43,6 +44,7 @@ const colors = ["Red", "Blue", "Gold", "Green", "Brown", "Pink", "Yellow", "Whit
 
 export default function ProductsPage() {
   const { user, token } = useAuth()
+  const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -105,7 +107,10 @@ export default function ProductsPage() {
     }
   }
 
-  const addToCart = async (productId: number) => {
+  const addToCart = async (productId: number, event?: React.MouseEvent) => {
+    event?.preventDefault()
+    event?.stopPropagation()
+
     if (user && token) {
       // Add to API for logged-in users
       try {
@@ -414,12 +419,12 @@ export default function ProductsPage() {
               }
             >
               {sortedProducts.map((product) => (
-                <Card
-                  key={product.ProductID}
-                  className={`group cursor-pointer hover:shadow-lg transition-shadow ${
-                    viewMode === "list" ? "flex flex-row" : ""
-                  }`}
-                >
+                <Link key={product.ProductID} href={`/products/${product.ProductID}`}>
+                  <Card
+                    className={`group cursor-pointer hover:shadow-lg transition-shadow ${
+                      viewMode === "list" ? "flex flex-row" : ""
+                    }`}
+                  >
                   <div className={`relative ${viewMode === "list" ? "w-48 flex-shrink-0" : "aspect-square"}`}>
                     <img
                       src={product.PrimaryImage || "/placeholder.svg"}
@@ -485,7 +490,7 @@ export default function ProductsPage() {
                           size="sm"
                           className="flex-1"
                           disabled={product.TotalStock === 0}
-                          onClick={() => addToCart(product.ProductID)}
+                          onClick={(e) => addToCart(product.ProductID, e)}
                         >
                           Add to Cart
                         </Button>
@@ -498,7 +503,8 @@ export default function ProductsPage() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              </Link>
+            ))}
             </div>
 
             {sortedProducts.length === 0 && (

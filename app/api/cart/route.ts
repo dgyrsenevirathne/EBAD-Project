@@ -101,10 +101,31 @@ async function addToCart(request: NextRequest, user: any): Promise<Response> {
     }
 
     // Check stock - if variant specified, use variant stock, otherwise check if product has variants
+    let effectiveVariantId = variantId ? parseInt(variantId) : null;
     let availableStock = 0;
-    if (variantId) {
+
+    // If no variant specified, check if product has variants and auto-select first one
+    if (!effectiveVariantId) {
+      const variantCheckResult = await pool.request()
+        .input('productID', sql.Int, parseInt(productId))
+        .query(`
+          SELECT TOP 1 VariantID, Stock
+          FROM ProductVariants
+          WHERE ProductID = @productID AND IsActive = 1
+          ORDER BY VariantID
+        `);
+
+      if (variantCheckResult.recordset.length > 0) {
+        // Product has variants, auto-select the first one
+        effectiveVariantId = variantCheckResult.recordset[0].VariantID;
+        availableStock = variantCheckResult.recordset[0].Stock;
+      } else {
+        // No variants, unlimited stock
+        availableStock = 999999;
+      }
+    } else {
       const variantResult = await pool.request()
-        .input('variantID', sql.Int, parseInt(variantId))
+        .input('variantID', sql.Int, effectiveVariantId)
         .query(`
           SELECT Stock
           FROM ProductVariants
@@ -119,31 +140,6 @@ async function addToCart(request: NextRequest, user: any): Promise<Response> {
       }
 
       availableStock = variantResult.recordset[0].Stock;
-    } else {
-      // Check if product has variants
-      const variantCheckResult = await pool.request()
-        .input('productID', sql.Int, parseInt(productId))
-        .query(`
-          SELECT COUNT(*) as VariantCount
-          FROM ProductVariants
-          WHERE ProductID = @productID AND IsActive = 1
-        `);
-
-      if (variantCheckResult.recordset[0].VariantCount > 0) {
-        // Product has variants, get total stock from all variants
-        const totalStockResult = await pool.request()
-          .input('productID', sql.Int, parseInt(productId))
-          .query(`
-            SELECT SUM(Stock) as TotalStock
-            FROM ProductVariants
-            WHERE ProductID = @productID AND IsActive = 1
-          `);
-
-        availableStock = totalStockResult.recordset[0]?.TotalStock || 0;
-      } else {
-        // Product has no variants, assume unlimited stock
-        availableStock = 999999; // Unlimited for products without variants
-      }
     }
 
     if (availableStock < quantity) {
@@ -157,12 +153,12 @@ async function addToCart(request: NextRequest, user: any): Promise<Response> {
     const existingResult = await pool.request()
       .input('userID', sql.Int, user.UserID)
       .input('productID', sql.Int, parseInt(productId))
-      .input('variantID', sql.Int, variantId ? parseInt(variantId) : null)
+      .input('variantID', sql.Int, effectiveVariantId)
       .query(`
         SELECT CartID, Quantity
         FROM ShoppingCart
         WHERE UserID = @userID AND ProductID = @productID
-        AND (@variantID IS NULL OR VariantID = @variantID)
+        AND VariantID = @variantID
       `);
 
     if (existingResult.recordset.length > 0) {
@@ -180,7 +176,7 @@ async function addToCart(request: NextRequest, user: any): Promise<Response> {
       await pool.request()
         .input('userID', sql.Int, user.UserID)
         .input('productID', sql.Int, parseInt(productId))
-        .input('variantID', sql.Int, variantId ? parseInt(variantId) : null)
+        .input('variantID', sql.Int, effectiveVariantId)
         .input('quantity', sql.Int, quantity)
         .query(`
           INSERT INTO ShoppingCart (UserID, ProductID, VariantID, Quantity)
