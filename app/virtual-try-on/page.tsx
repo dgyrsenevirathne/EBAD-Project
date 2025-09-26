@@ -262,7 +262,7 @@ export default function VirtualTryOnPage() {
         body: JSON.stringify({
           productId: selectedProduct.ProductID,
           userImage: userImage,
-          customization: {
+          customizations: {
             bodyType,
             skinTone,
             showAccessories,
@@ -298,45 +298,59 @@ export default function VirtualTryOnPage() {
     }
   }
 
-  const pollForResult = async (sessionId: string) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(`/api/virtual-try-on/sessions/${sessionId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        })
-        const data = await response.json()
+const pollForResult = async (sessionId: string) => {
+  const pollInterval = setInterval(async () => {
+    try {
+      const response = await fetch(`/api/virtual-try-on/sessions/${sessionId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+      const data = await response.json()
 
-        if (data.success && data.data.status === 'completed') {
-          setTryOnSessions(prev =>
-            prev.map(session =>
-              session.id === sessionId
-                ? { ...session, status: 'completed', resultImage: data.data.resultImage }
-                : session
-            )
+      if (data.success && data.data.status === 'completed') {
+        setTryOnSessions(prev =>
+          prev.map(session =>
+            session.id === sessionId
+              ? { ...session, status: 'completed', resultImage: data.data.resultImagePath }
+              : session
           )
-          clearInterval(pollInterval)
-        } else if (data.success && data.data.status === 'failed') {
-          setTryOnSessions(prev =>
-            prev.map(session =>
-              session.id === sessionId
-                ? { ...session, status: 'failed' }
-                : session
-            )
+        )
+        clearInterval(pollInterval)
+      } else if (data.success && data.data.status === 'failed') {
+        setTryOnSessions(prev =>
+          prev.map(session =>
+            session.id === sessionId
+              ? { ...session, status: 'failed' }
+              : session
           )
-          clearInterval(pollInterval)
-        }
-      } catch (error) {
-        console.error('Failed to poll for result:', error)
+        )
+        clearInterval(pollInterval)
       }
-    }, 3000) // Poll every 3 seconds
+    } catch (error) {
+      console.error('Failed to poll for result:', error)
+    }
+  }, 3000) // Poll every 3 seconds
 
-    // Stop polling after 2 minutes
-    setTimeout(() => {
-      clearInterval(pollInterval)
-    }, 120000)
+  // Stop polling after 2 minutes
+  setTimeout(() => {
+    clearInterval(pollInterval)
+  }, 120000)
+}
+
+const downloadImage = (imageUrl: string | null, sessionId: string) => {
+  if (!imageUrl) {
+    alert('No result image available to download.')
+    return
   }
+
+  const link = document.createElement('a')
+  link.href = imageUrl
+  link.download = `ceylon-threads-tryon-${sessionId}.jpg`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
 
   const addToCart = async (productId: number) => {
     if (!user || !token) {
@@ -941,7 +955,12 @@ export default function VirtualTryOnPage() {
                               <Share2 className="h-4 w-4 mr-1" />
                               Share
                             </Button>
-                            <Button variant="outline" size="sm">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => downloadImage(session.resultImage, session.id)}
+                              disabled={!session.resultImage}
+                            >
                               <Download className="h-4 w-4 mr-1" />
                               Download
                             </Button>
