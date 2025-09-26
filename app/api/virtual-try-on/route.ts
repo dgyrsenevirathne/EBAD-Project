@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
+import Replicate from 'replicate';
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
@@ -38,38 +39,101 @@ async function processTryOn(
   productImagePath: string,
   customizations: any
 ): Promise<string> {
-  const userImage = sharp(userImagePath);
-  const metadata = await userImage.metadata();
-  
-  const productImage = sharp(productImagePath);
-  const productMetadata = await productImage.metadata();
-  
-  // Resize product to suitable size (e.g., 200px width, maintain aspect)
-  const resizedProduct = productImage.resize(200, null, { fit: 'inside' });
-  
-  // Calculate position: center horizontally, torso vertically (adjust for body type)
-  let yOffset = Math.floor(metadata.height * 0.3); // Start at 30% from top
-  if (customizations.bodyType === 'plus') {
-    yOffset += 30; // Slightly lower for plus size
-  } else if (customizations.bodyType === 'slim') {
-    yOffset -= 20; // Slightly higher for slim
+  const replicate = new Replicate({
+    auth: process.env.REPLICATE_API_TOKEN
+  });
+
+  // Convert local images to base64
+  const userImageBase64 = fs.readFileSync(userImagePath, 'base64');
+  const productImageBase64 = fs.readFileSync(productImagePath, 'base64');
+
+  try {
+    // Use Replicate's virtual try-on model (validated working)
+    const output = await replicate.run(
+      "fofr/virtual-try-on-v1.0",
+      {
+        input: {
+          person_image: `data:image/jpeg;base64,${userImageBase64}`,
+          clothing_image: `data:image/jpeg;base64,${productImageBase64}`,
+          // Model auto-fits garment to person pose
+        }
+      }
+    );
+
+    // Output is image URL
+    const resultImageUrl = Array.isArray(output) ? output[0] : output;
+    if (!resultImageUrl) {
+      throw new Error('No output from Replicate');
+    }
+
+    // Download result
+    const response = await fetch(resultImageUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download image: ${response.status}`);
+    }
+    const buffer = await response.arrayBuffer();
+
+    const resultPath = userImagePath.replace('.jpg', '-result.jpg');
+    fs.writeFileSync(resultPath, Buffer.from(buffer));
+
+    return resultPath;
+  } catch (error) {
+    console.error('Replicate try-on error:', error);
+    // Fallback to improved Sharp compositing
+    console.log('Falling back to Sharp compositing');
+    const userImage = sharp(userImagePath);
+    const metadata = await userImage.metadata();
+    
+    const productImage = sharp(productImagePath);
+    const productMetadata = await productImage.metadata();
+    
+    // Improved proportional resize: base on user height for clothing (30% height max), maintain aspect
+    const maxClothingHeight = Math.floor(metadata.height * 0.3);
+    const maxClothingWidth = Math.floor(metadata.width * 0.5); // Wider for garments
+    const aspectRatio = productMetadata.width / productMetadata.height;
+    let clothingHeight = Math.min(maxClothingHeight, Math.floor(maxClothingWidth / aspectRatio));
+    let clothingWidth = Math.floor(clothingHeight * aspectRatio);
+    
+    let resizedProduct = productImage.resize(clothingWidth, clothingHeight, { fit: 'inside', withoutEnlargement: true });
+    
+    // Position: lower torso/waist level (35% height from top), center x
+    let yOffset = Math.floor(metadata.height * 0.35);
+    let currentWidth = clothingWidth;
+    let currentHeight = clothingHeight;
+    if (customizations.bodyType === 'plus') {
+      yOffset += Math.floor(metadata.height * 0.08); // Lower 8% for fuller figure
+      const plusScale = 1.15;
+      currentWidth = Math.min(Math.floor(clothingWidth * plusScale), metadata.width - 10);
+      currentHeight = Math.floor(currentHeight * plusScale);
+      resizedProduct = resizedProduct.resize(currentWidth, currentHeight, { fit: 'inside', withoutEnlargement: true });
+    } else if (customizations.bodyType === 'slim') {
+      yOffset -= Math.floor(metadata.height * 0.08); // Higher 8% for slimmer
+      const slimScale = 0.85;
+      currentWidth = Math.floor(clothingWidth * slimScale);
+      currentHeight = Math.floor(currentHeight * slimScale);
+      resizedProduct = resizedProduct.resize(currentWidth, currentHeight, { fit: 'inside', withoutEnlargement: true });
+    }
+    
+    // Ensure composite fits within user image
+    currentWidth = Math.min(currentWidth, metadata.width);
+    currentHeight = Math.min(currentHeight, metadata.height);
+    const xPosition = Math.floor((metadata.width - currentWidth) / 2);
+    let yPosition = Math.max(0, Math.min(yOffset, metadata.height - currentHeight));
+    
+    const resultPath = userImagePath.replace('.jpg', '-result.jpg');
+    await userImage
+      .composite([{
+        input: await resizedProduct.toBuffer(),
+        top: yPosition,
+        left: xPosition,
+        blend: 'over'
+      }])
+      .modulate({ brightness: 0.95 }) // Slight darkening for better integration
+      .jpeg({ quality: 85 })
+      .toFile(resultPath);
+    
+    return resultPath;
   }
-  
-  const xPosition = Math.floor((metadata.width - 200) / 2);
-  let yPosition = Math.max(0, yOffset);
-  
-  // Composite: overlay product on user image
-  const resultPath = userImagePath.replace('.jpg', '-result.jpg');
-  await userImage
-    .composite([{
-      input: await resizedProduct.toBuffer(),
-      top: yPosition,
-      left: xPosition
-    }])
-    .jpeg({ quality: 80 })
-    .toFile(resultPath);
-  
-  return resultPath;
 }
 
 export async function POST(request: NextRequest) {
