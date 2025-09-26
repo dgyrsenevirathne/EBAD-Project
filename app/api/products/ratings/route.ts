@@ -20,18 +20,16 @@ export async function GET(request: NextRequest) {
   try {
     pool = await sql.connect(sqlConfig);
 
-    // Fetch all ratings and reviews for the product
+    // Fetch all ratings and reviews for the product with user name and formatted date
     const ratingsResult = await pool.request()
       .input('productId', sql.Int, parseInt(productId))
       .query(`
         SELECT
-          pr.RatingID,
-          pr.UserID,
-          pr.ProductID,
-          pr.Rating,
-          pr.Review,
-          pr.CreatedAt,
-          pr.UpdatedAt
+          pr.RatingID as id,
+          pr.Rating as rating,
+          pr.Review as review,
+          FORMAT(pr.CreatedAt, 'MMM dd, yyyy') as date,
+          (u.FirstName + ' ' + ISNULL(u.LastName, '')) as name
         FROM ProductRatings pr
         LEFT JOIN Users u ON pr.UserID = u.UserID
         WHERE pr.ProductID = @productId
@@ -42,19 +40,21 @@ export async function GET(request: NextRequest) {
     const avgResult = await pool.request()
       .input('productId', sql.Int, parseInt(productId))
       .query(`
-        SELECT AVG(CAST(Rating AS FLOAT)) AS AverageRating
+        SELECT AVG(CAST(Rating AS FLOAT)) AS AverageRating,
+               COUNT(*) as totalRatings
         FROM ProductRatings
         WHERE ProductID = @productId
       `);
 
     const averageRating = avgResult.recordset[0].AverageRating || 0;
+    const totalRatings = avgResult.recordset[0].totalRatings || 0;
 
     return NextResponse.json({
       success: true,
       data: {
         ratings: ratingsResult.recordset,
         averageRating: parseFloat(averageRating.toFixed(2)),
-        totalRatings: ratingsResult.recordset.length,
+        totalRatings: totalRatings,
       },
     });
   } catch (error) {

@@ -149,9 +149,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': user.id.toString(), // Assuming user.id exists
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
+          userId: user.id,
           productId: product?.ProductID,
           rating: newRating,
           review: newReview,
