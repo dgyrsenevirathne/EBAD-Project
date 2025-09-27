@@ -254,7 +254,7 @@ export default function CartPage() {
   // Calculate subtotal with festival bundle discounts
   const calculateSubtotalWithDiscounts = () => {
     const festivalGroups = cartItems.reduce((groups, item) => {
-      if (item.Festival) {
+      if (item.Festival && item.Festival !== 'none') {
         if (!groups[item.Festival]) {
           groups[item.Festival] = []
         }
@@ -266,8 +266,8 @@ export default function CartPage() {
     let subtotal = 0
     let bundleSavings = 0
 
-    // Non-festival items
-    const nonFestivalItems = cartItems.filter(item => !item.Festival)
+    // Non-festival items (including 'none')
+    const nonFestivalItems = cartItems.filter(item => !item.Festival || item.Festival === 'none')
     subtotal += nonFestivalItems.reduce((sum, item) => sum + item.BasePrice * item.Quantity, 0)
 
     // Festival groups

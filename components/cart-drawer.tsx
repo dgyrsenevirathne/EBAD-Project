@@ -72,7 +72,7 @@ export function CartDrawer({ refreshTrigger }: { refreshTrigger?: number }) {
   }
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && cartItems.length === 0) {
       fetchCart()
     }
   }, [isOpen, user])

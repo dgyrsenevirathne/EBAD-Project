@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import sql from 'mssql';
 import { sqlConfig } from '@/config/database';
+import { getPool } from '@/lib/database';
 
 export async function GET() {
   let pool: sql.ConnectionPool | null = null;
 
   try {
-    pool = await sql.connect(sqlConfig);
+    pool = await getPool();
 
     const result = await pool.request().query(`
       SELECT TOP 12
@@ -32,9 +33,5 @@ export async function GET() {
       { success: false, message: 'Failed to fetch featured products' },
       { status: 500 }
     );
-  } finally {
-    if (pool) {
-      await pool.close();
-    }
   }
 }

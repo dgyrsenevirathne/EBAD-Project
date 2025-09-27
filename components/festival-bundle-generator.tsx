@@ -54,7 +54,7 @@ export function FestivalBundleGenerator({ cartItems, onAddToCart }: { cartItems:
 
   useEffect(() => {
     const festivalsInCart = [...new Set(cartItems
-      .filter(item => item.Festival !== null)
+      .filter(item => item.Festival !== null && item.Festival !== 'none')
       .map(item => item.Festival as string)
     )]
 

@@ -1,133 +1,143 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireWholesale } from '@/lib/auth';
 import sql from 'mssql';
 import { sqlConfig } from '@/config/database';
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId');
+async function GET(request: NextRequest) {
+  return requireWholesale(async (request, user) => {
+    try {
+      const pool = await sql.connect(sqlConfig);
+      const requestSql = pool.request();
+      requestSql.input('userID', sql.Int, user.UserID);
 
-  if (!userId) {
-    return NextResponse.json(
-      { success: false, message: 'User ID is required' },
-      { status: 400 }
-    );
-  }
+      const query = `
+        SELECT 
+          o.OrderID as id,
+          o.OrderNumber as orderNumber,
+          CONVERT(VARCHAR, o.CreatedAt, 103) as date,
+          o.Status as status,
+          o.TotalAmount as total,
+          ISNULL(o.DiscountAmount, 0) as discount,
+          o.InvoiceNumber as invoiceNumber,
+          (SELECT COUNT(*) FROM OrderItems oi WHERE oi.OrderID = o.OrderID) as items
+        FROM Orders o
+        WHERE o.UserID = @userID AND o.OrderType = 'wholesale'
+        ORDER BY o.CreatedAt DESC
+      `;
 
-  let pool: sql.ConnectionPool | null = null;
+      const result = await requestSql.query(query);
 
-  try {
-    pool = await sql.connect(sqlConfig);
-
-    const query = `
-      SELECT
-        wo.WholesaleOrderID,
-        wo.OrderNumber,
-        wo.OrderDate,
-        wo.Status,
-        wo.TotalAmount,
-        wo.DiscountAmount,
-        wo.InvoiceNumber,
-        COUNT(woi.WholesaleOrderItemID) as ItemCount
-      FROM WholesaleOrders wo
-      LEFT JOIN WholesaleOrderItems woi ON wo.WholesaleOrderID = woi.WholesaleOrderID
-      WHERE wo.UserID = @userId
-      GROUP BY wo.WholesaleOrderID, wo.OrderNumber, wo.OrderDate, wo.Status, wo.TotalAmount, wo.DiscountAmount, wo.InvoiceNumber
-      ORDER BY wo.OrderDate DESC
-    `;
-
-    const result = await pool.request()
-      .input('userId', sql.Int, parseInt(userId))
-      .query(query);
-
-    const orders = result.recordset.map(order => ({
-      id: order.OrderNumber,
-      date: order.OrderDate.toISOString().split('T')[0],
-      status: order.Status,
-      total: order.TotalAmount,
-      discount: order.DiscountAmount,
-      invoiceNumber: order.InvoiceNumber,
-      items: order.ItemCount,
-    }));
-
-    return NextResponse.json({
-      success: true,
-      data: orders,
-    });
-  } catch (error) {
-    console.error('Get wholesale orders error:', error);
-    return NextResponse.json(
-      { success: false, message: 'Failed to fetch wholesale orders' },
-      { status: 500 }
-    );
-  } finally {
-    if (pool) {
       await pool.close();
+
+      return NextResponse.json({ success: true, data: result.recordset });
+    } catch (error) {
+      console.error('Error fetching wholesale orders:', error);
+      return NextResponse.json({ success: false, message: 'Failed to fetch orders' }, { status: 500 });
     }
-  }
+  })(request);
 }
 
-export async function POST(request: NextRequest) {
-  let pool: sql.ConnectionPool | null = null;
+async function POST(request: NextRequest) {
+  return requireWholesale(async (request, user) => {
+    try {
+      const body = await request.json();
+      const { items, total, discount } = body; // items: [{sku, quantity, color, size, price}]
 
-  try {
-    const body = await request.json();
-    const { userId, items, totalAmount, discountAmount } = body;
+      const pool = await sql.connect(sqlConfig);
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
 
-    if (!userId || !items || items.length === 0) {
-      return NextResponse.json(
-        { success: false, message: 'User ID and items are required' },
-        { status: 400 }
-      );
+      try {
+        const requestSql = transaction.request();
+        requestSql.input('userID', sql.Int, user.UserID);
+        requestSql.input('total', sql.Decimal(10,2), total);
+        requestSql.input('discount', sql.Decimal(10,2), discount || 0);
+        requestSql.input('orderType', sql.NVarChar, 'wholesale');
+
+        // Generate OrderNumber
+        const orderNumber = `WH-${Date.now()}`;
+        requestSql.input('orderNumber', sql.NVarChar(50), orderNumber);
+
+        const orderQuery = `
+          INSERT INTO Orders (UserID, OrderNumber, TotalAmount, DiscountAmount, OrderType, Status)
+          OUTPUT INSERTED.OrderID
+          VALUES (@userID, @orderNumber, @total, @discount, @orderType, 'processing')
+        `;
+        const orderResult = await requestSql.query(orderQuery);
+        const orderID = orderResult.recordset[0].OrderID;
+
+        // Insert order items and update stock
+        for (const item of items) {
+          // Find ProductID by SKU
+          const productRequest = transaction.request();
+          productRequest.input('sku', sql.NVarChar, item.sku);
+          const productResult = await productRequest.query('SELECT ProductID FROM Products WHERE SKU = @sku');
+          if (productResult.recordset.length === 0) throw new Error(`Product with SKU ${item.sku} not found`);
+          const productID = productResult.recordset[0].ProductID;
+
+          // Find VariantID by color/size if provided
+          let variantID = null;
+          if (item.color || item.size) {
+            const variantRequest = transaction.request();
+            variantRequest.input('productID', sql.Int, productID);
+            variantRequest.input('color', sql.NVarChar, item.color || null);
+            variantRequest.input('size', sql.NVarChar, item.size || null);
+            const variantResult = await variantRequest.query(`
+              SELECT VariantID FROM ProductVariants
+              WHERE ProductID = @productID AND (Color = @color OR @color IS NULL) AND (Size = @size OR @size IS NULL)
+            `);
+            if (variantResult.recordset.length > 0) {
+              variantID = variantResult.recordset[0].VariantID;
+            }
+          }
+
+          const itemRequest = transaction.request();
+          itemRequest.input('orderID', sql.Int, orderID);
+          itemRequest.input('productID', sql.Int, productID);
+          itemRequest.input('variantID', sql.Int, variantID);
+          itemRequest.input('quantity', sql.Int, item.quantity);
+          itemRequest.input('unitPrice', sql.Decimal(10,2), item.price);
+          itemRequest.input('color', sql.NVarChar, item.color);
+          itemRequest.input('size', sql.NVarChar, item.size);
+
+          const itemQuery = `
+            INSERT INTO OrderItems (OrderID, ProductID, VariantID, Quantity, UnitPrice, Color, Size)
+            VALUES (@orderID, @productID, @variantID, @quantity, @unitPrice, @color, @size)
+          `;
+          await itemRequest.query(itemQuery);
+
+          // Update stock - ProductVariants if variant, else Products
+          if (variantID) {
+            const stockRequest = transaction.request();
+            stockRequest.input('variantID', sql.Int, variantID);
+            stockRequest.input('quantity', sql.Int, item.quantity);
+            await stockRequest.query(`
+              UPDATE ProductVariants SET Stock = Stock - @quantity WHERE VariantID = @variantID AND Stock >= @quantity
+            `);
+          } else {
+            const stockRequest = transaction.request();
+            stockRequest.input('productID', sql.Int, productID);
+            stockRequest.input('quantity', sql.Int, item.quantity);
+            await stockRequest.query(`
+              UPDATE Products SET Stock = Stock - @quantity WHERE ProductID = @productID AND Stock >= @quantity
+            `);
+          }
+        }
+
+        await transaction.commit();
+
+        await pool.close();
+
+        return NextResponse.json({ success: true, message: 'Order created', data: { orderID, orderNumber } });
+      } catch (err) {
+        await transaction.rollback();
+        throw err;
+      }
+    } catch (error) {
+      console.error('Error creating wholesale order:', error);
+      return NextResponse.json({ success: false, message: 'Failed to create order' }, { status: 500 });
     }
-
-    pool = await sql.connect(sqlConfig);
-
-    // Generate order number
-    const orderNumber = 'WHO' + Date.now().toString().slice(-6);
-
-    // Insert order
-    const orderResult = await pool.request()
-      .input('userId', sql.Int, userId)
-      .input('orderNumber', sql.NVarChar(50), orderNumber)
-      .input('totalAmount', sql.Decimal(10, 2), totalAmount)
-      .input('discountAmount', sql.Decimal(10, 2), discountAmount || 0)
-      .query(`
-        INSERT INTO WholesaleOrders (UserID, OrderNumber, TotalAmount, DiscountAmount, Status, OrderDate)
-        OUTPUT INSERTED.WholesaleOrderID
-        VALUES (@userId, @orderNumber, @totalAmount, @discountAmount, 'processing', GETDATE())
-      `);
-
-    const orderId = orderResult.recordset[0].WholesaleOrderID;
-
-    // Insert order items
-    for (const item of items) {
-      await pool.request()
-        .input('orderId', sql.Int, orderId)
-        .input('wholesaleProductId', sql.Int, item.wholesaleProductId)
-        .input('quantity', sql.Int, item.quantity)
-        .input('unitPrice', sql.Decimal(10, 2), item.unitPrice)
-        .input('color', sql.NVarChar(50), item.color || null)
-        .input('size', sql.NVarChar(50), item.size || null)
-        .query(`
-          INSERT INTO WholesaleOrderItems (WholesaleOrderID, WholesaleProductID, Quantity, UnitPrice, Color, Size)
-          VALUES (@orderId, @wholesaleProductId, @quantity, @unitPrice, @color, @size)
-        `);
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Wholesale order created successfully',
-      data: { orderId, orderNumber },
-    });
-  } catch (error) {
-    console.error('Create wholesale order error:', error);
-    return NextResponse.json(
-      { success: false, message: 'Failed to create wholesale order' },
-      { status: 500 }
-    );
-  } finally {
-    if (pool) {
-      await pool.close();
-    }
-  }
+  })(request);
 }
+
+export { GET, POST };

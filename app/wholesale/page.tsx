@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
+import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
   Users,
@@ -35,7 +36,8 @@ interface WholesaleProduct {
   name: string
   sku: string
   category: string
-  basePrice: number
+  retailPrice: number
+  wholesalePrice: number
   minOrderQty: number
   stock: number
   image: string | null
@@ -58,7 +60,8 @@ interface WholesaleOrder {
 }
 
 export default function WholesalePage() {
-  const { user } = useAuth()
+  const router = useRouter()
+  const { user, token } = useAuth()
   const [wholesaleProducts, setWholesaleProducts] = useState<WholesaleProduct[]>([])
   const [wholesaleOrders, setWholesaleOrders] = useState<WholesaleOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -78,10 +81,17 @@ export default function WholesalePage() {
     message: "",
   })
 
+
   useEffect(() => {
     const fetchWholesaleProducts = async () => {
       try {
-        const response = await fetch('/api/wholesale/products')
+        const headers: Record<string, string> = {}
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`
+        }
+        const response = await fetch('/api/wholesale/products', {
+          headers
+        })
         const data = await response.json()
         if (data.success) {
           setWholesaleProducts(data.data)
@@ -94,7 +104,7 @@ export default function WholesalePage() {
     }
 
     fetchWholesaleProducts()
-  }, [])
+  }, [token])
 
   useEffect(() => {
     const fetchWholesaleOrders = async () => {
@@ -102,7 +112,11 @@ export default function WholesalePage() {
 
       setOrdersLoading(true)
       try {
-        const response = await fetch(`/api/wholesale/orders?userId=${user.id}`)
+        const response = await fetch(`/api/wholesale/orders?userId=${user.id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
         const data = await response.json()
         if (data.success) {
           setWholesaleOrders(data.data)
@@ -115,7 +129,7 @@ export default function WholesalePage() {
     }
 
     fetchWholesaleOrders()
-  }, [user])
+  }, [user, token])
 
   const addQuickOrderRow = () => {
     setQuickOrderItems([...quickOrderItems, { sku: "", quantity: 0, color: "", size: "" }])
@@ -134,7 +148,7 @@ export default function WholesalePage() {
 
   const getWholesalePrice = (product: WholesaleProduct, quantity: number) => {
     const tier = product.pricing.find((p) => quantity >= p.minQty && (p.maxQty === null || quantity <= p.maxQty))
-    return tier ? tier.price : product.basePrice
+    return tier ? tier.price : product.wholesalePrice
   }
 
   const getDiscountPercentage = (product: WholesaleProduct, quantity: number) => {
@@ -144,11 +158,15 @@ export default function WholesalePage() {
 
   const submitWholesaleInquiry = async () => {
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
       const response = await fetch('/api/wholesale/inquiries', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(wholesaleInquiry),
       })
 
@@ -174,9 +192,59 @@ export default function WholesalePage() {
     }
   }
 
+  const addToWholesaleCart = async (product: WholesaleProduct, quantity: number = product.minOrderQty) => {
+    if (!user) {
+      alert('Please login to add to cart')
+      return
+    }
+
+    if (user.userType !== 'wholesale') {
+      alert('You need a wholesale account to add items to the wholesale cart')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/cart/add', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          productId: product.id,
+          variantId: null,  // Default: no specific variant; can be enhanced to select one
+          quantity,
+        }),
+      })
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        alert('Failed to add to cart: Invalid response from server');
+        return;
+      }
+
+      if (data.success) {
+        alert(`${quantity} x ${product.name} added to cart at wholesale price!`)
+        // Refresh cart if needed, e.g., via CartDrawer props
+      } else {
+        alert(data.message || 'Failed to add to cart')
+      }
+    } catch (error) {
+      console.error('Failed to add to cart:', error)
+      alert('Failed to add to cart. Please try again.')
+    }
+  }
+
   const processQuickOrder = async () => {
     if (!user) {
       alert('Please login to place an order')
+      return
+    }
+
+    if (user.userType !== 'wholesale') {
+      alert('You need a wholesale account to place wholesale orders')
       return
     }
 
@@ -196,33 +264,33 @@ export default function WholesalePage() {
 
         const unitPrice = getWholesalePrice(product, item.quantity)
         return {
-          wholesaleProductId: product.id,
+          sku: item.sku,
           quantity: item.quantity,
-          unitPrice,
+          price: unitPrice,
           color: item.color,
           size: item.size,
         }
       })
 
-      const totalAmount = items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0)
-      const discountAmount = items.reduce((sum, item) => {
-        const product = wholesaleProducts.find(p => p.id === item.wholesaleProductId)
+      const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+      const discount = items.reduce((sum, item) => {
+        const product = wholesaleProducts.find(p => p.sku === item.sku)
         if (!product) return sum
-        const retailPrice = product.basePrice
-        const discount = retailPrice - item.unitPrice
-        return sum + (discount * item.quantity)
+        const retailPrice = product.retailPrice
+        const discountPerUnit = retailPrice - item.price
+        return sum + (discountPerUnit * item.quantity)
       }, 0)
 
       const response = await fetch('/api/wholesale/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          userId: user.id,
           items,
-          totalAmount,
-          discountAmount,
+          total,
+          discount
         }),
       })
 
@@ -233,7 +301,11 @@ export default function WholesalePage() {
         setQuickOrderItems([{ sku: "", quantity: 0, color: "", size: "" }])
         // Refresh orders
         if (user) {
-          const ordersResponse = await fetch(`/api/wholesale/orders?userId=${user.id}`)
+          const ordersResponse = await fetch(`/api/wholesale/orders?userId=${user.id}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          })
           const ordersData = await ordersResponse.json()
           if (ordersData.success) {
             setWholesaleOrders(ordersData.data)
@@ -402,7 +474,7 @@ export default function WholesalePage() {
                               <div className="flex justify-between text-sm">
                                 <span>Retail Price:</span>
                                 <span className="line-through text-muted-foreground">
-                                  LKR {product.basePrice.toLocaleString()}
+                                  LKR {product.retailPrice.toLocaleString()}
                                 </span>
                               </div>
                               {product.pricing.map((tier, index) => (
@@ -423,7 +495,7 @@ export default function WholesalePage() {
                               ))}
                             </div>
                             <p className="text-xs text-muted-foreground">{product.stock} units in stock</p>
-                            <Button size="sm" className="w-full">
+                            <Button size="sm" className="w-full" onClick={() => addToWholesaleCart(product)}>
                               Add to Wholesale Cart
                             </Button>
                           </div>
@@ -547,7 +619,7 @@ export default function WholesalePage() {
                       <Plus className="h-4 w-4 mr-2" />
                       Add Row
                     </Button>
-                    <Button>Process Quick Order</Button>
+                    <Button onClick={processQuickOrder}>Process Quick Order</Button>
                   </div>
                 </div>
               </CardContent>
@@ -621,7 +693,7 @@ export default function WholesalePage() {
                       <div className="flex justify-between">
                         <span>Retail Price:</span>
                         <span className="line-through text-muted-foreground">
-                          LKR {selectedProduct.basePrice.toLocaleString()}
+                          LKR {selectedProduct.retailPrice.toLocaleString()}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -648,13 +720,13 @@ export default function WholesalePage() {
                         <span>
                           LKR{" "}
                           {(
-                            (selectedProduct.basePrice - getWholesalePrice(selectedProduct, calculatorQty)) *
+                            (selectedProduct.retailPrice - getWholesalePrice(selectedProduct, calculatorQty)) *
                             calculatorQty
                           ).toLocaleString()}
                         </span>
                       </div>
                     </div>
-                    <Button className="w-full" disabled={calculatorQty < selectedProduct.minOrderQty}>
+                    <Button className="w-full" disabled={calculatorQty < selectedProduct.minOrderQty} onClick={() => addToWholesaleCart(selectedProduct, calculatorQty)}>
                       Add to Wholesale Cart
                     </Button>
                   </CardContent>

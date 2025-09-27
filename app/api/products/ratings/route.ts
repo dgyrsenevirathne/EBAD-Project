@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from 'mssql';
 import { sqlConfig } from '@/config/database';
+import { getPool } from '@/lib/database';
 
 const MAX_REVIEW_LENGTH = 1000;
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
   let pool: sql.ConnectionPool | null = null;
 
   try {
-    pool = await sql.connect(sqlConfig);
+    pool = await getPool();
 
     // Fetch all ratings and reviews for the product with user name and formatted date
     const ratingsResult = await pool.request()
@@ -63,10 +64,6 @@ export async function GET(request: NextRequest) {
       { success: false, message: 'Failed to fetch product ratings' },
       { status: 500 }
     );
-  } finally {
-    if (pool) {
-      await pool.close();
-    }
   }
 }
 
@@ -99,7 +96,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    pool = await sql.connect(sqlConfig);
+    pool = await getPool();
 
     // Check if rating by this user for this product exists
     const existingResult = await pool.request()
@@ -152,9 +149,5 @@ export async function POST(request: NextRequest) {
       { success: false, message: 'Failed to submit product rating' },
       { status: 500 }
     );
-  } finally {
-    if (pool) {
-      await pool.close();
-    }
   }
 }
